@@ -17,6 +17,10 @@ using Il2Cpp;
 using Il2CppScheduleOne.UI.Stations;
 using Il2CppScheduleOne.UI.Stations.Drying_rack;
 using static UnityEngine.ExpressionEvaluator;
+using Il2CppFishNet.Managing;
+
+using Il2CppFishNet.Serializing;
+
 
 
 
@@ -44,6 +48,8 @@ using Il2CppSystem.Collections;
 using Il2CppScheduleOne;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppFishNet;
+using Il2CppFishNet.Object;
+using Il2CppFishNet.Transporting;
 #endif
 
 namespace ProduceMore
@@ -149,11 +155,14 @@ namespace ProduceMore
         }
 
         // modified copy of DryingRack.MinPass
-        public static void NewMinPass(DryingRack __instance)
+        //public static void NewMinPass(DryingRack __instance)
+        [HarmonyPatch(typeof(DryingRack), "MinPass")]
+        [HarmonyPrefix]
+        public static bool MinPassPrefix(DryingRack __instance)
         {
             if (__instance == null)
             {
-                return;
+                return false;
             }
             foreach (DryingOperation dryingOperation in __instance.DryingOperations.ToArray())
             {
@@ -173,9 +182,11 @@ namespace ProduceMore
                     }
                 }
             }
+            return false;
         }
 
         // baby's first transpiler patch
+        /*
         // patch minpass to call into our NewMinPass routine, instead of jumping to IL2CPP ether
         [HarmonyPatch(typeof(DryingRack), "MinPass")]
         [HarmonyTranspiler]
@@ -225,381 +236,286 @@ namespace ProduceMore
 
             return modifiedIL;
         }
+        */
+    }
 
 
+    // Patch lab oven capacity and speed
+    [HarmonyPatch]
+    public static class LabOvenPatches
+    {
+        public static ProduceMoreMod Mod;
 
+        // speed
+        [HarmonyPatch(typeof(OvenCookOperation), "GetCookDuration")]
+        [HarmonyPostfix]
+        public static void GetCookDurationPostfix(ref int __result)
+        {
+            if (Mod.settings.GetStationSpeed("LabOven") > 0)
+            {
+                __result = (int)((float)__result / Mod.settings.GetStationSpeed("LabOven"));
+            }
+        }
+
+        [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
+        [HarmonyPostfix]
+        public static void IsReadyPostfix(OvenCookOperation __instance, ref bool __result)
+        {
+            // Re-insert original method body.
+            __result = __instance.CookProgress >= __instance.GetCookDuration();
+        }
+
+
+        //TODO: patch laboven capacity.
+        // or don't. too much effort for too little reward
+    }
+
+    // Patch mixing station capacity and speed
+    [HarmonyPatch]
+    public static class MixingStationPatches
+    {
+        public static ProduceMoreMod Mod;
+
+        // capacity
+        [HarmonyPatch(typeof(MixingStation), "GetMixQuantity")]
+        [HarmonyPrefix]
+        public static bool GetMixQuantityPrefix(MixingStation __instance, ref int __result)
+        {
+            if (!Mod.processedStationCapacities.Contains(__instance))
+            {
+                __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+                Mod.processedStationCapacities.Add(__instance);
+            }
+
+            if (__instance.GetProduct() == null || __instance.GetMixer() == null)
+            {
+                __result = 0;
+                return false;
+            }
+            __result = Mathf.Min(Mathf.Min(__instance.ProductSlot.Quantity, __instance.MixerSlot.Quantity), __instance.MaxMixQuantity);
+            return false;
+        }
+
+        // maybe unnecessary
+        [HarmonyPatch(typeof(MixingStation), "CanStartMix")]
+        [HarmonyPostfix]
+        public static void CanStartMixPostfix(MixingStation __instance, ref bool __result)
+        {
+            // re-insert original method body.
+            __result = __instance.GetMixQuantity() > 0 && __instance.OutputSlot.Quantity == 0;
+        }
+
+        // speed
+        [HarmonyPatch(typeof(MixingStation), "GetMixTimeForCurrentOperation")]
+        [HarmonyPrefix]
+        public static bool GetMixTimePrefix(MixingStation __instance, ref int __result)
+        {
+            int mixTimePerItem = (int)(15f / Mod.settings.GetStationSpeed("MixingStation"));
+            if (__instance.MixTimePerItem != mixTimePerItem)
+            {
+                __instance.MixTimePerItem = mixTimePerItem;
+                Mod.processedStationSpeeds.Add(__instance);
+            }
+
+            if (__instance.CurrentMixOperation == null)
+            {
+                __result = 0;
+            }
+            __result = __instance.MixTimePerItem * __instance.CurrentMixOperation.Quantity;
+
+            return false;
+        }
+    }
+
+    /*
+    // Brick press patches
+    [HarmonyPatch]
+    public static class BrickPressPatches
+    {
+        public static ProduceMoreMod Mod;
+        // capacity
+        //[HarmonyPatch(typeof(BrickPress), "GetMainInputs")]
+        public static bool GetMainInputsPrefix(BrickPress __instance, ref ItemInstance primaryItem, ref int primaryItemQuantity, ref ItemInstance secondaryItem, ref int secondaryItemQuantity)
+        {
+            int batchLimit = Mod.settings.GetStationCapacity("BrickPress");
+            List<ItemInstance> list = new List<ItemInstance>();
+            Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
+            int i, k;
+            for (i = 0; i < __instance.InputSlots.Count; i = k + 1)
+            {
+                if (__instance.InputSlots[i].ItemInstance != null)
+                {
+                    ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.InputSlots[i].ItemInstance.ID);
+                    if (itemInstance == null || !itemInstance.CanStackWith(__instance.InputSlots[i].ItemInstance, false))
+                    {
+                        itemInstance = __instance.InputSlots[i].ItemInstance;
+                        list.Add(itemInstance);
+                        if (!itemQuantities.ContainsKey(__instance.InputSlots[i].ItemInstance))
+                        {
+                            itemQuantities.Add(__instance.InputSlots[i].ItemInstance, 0);
+                        }
+                    }
+                    ItemInstance key = itemInstance;
+                    itemQuantities[key] += __instance.InputSlots[i].Quantity;
+                }
+                k = i;
+            }
+            for (int j = 0; j < list.Count; j++)
+            {
+                if (itemQuantities[list[j]] > 20)
+                {
+                    //TODO: fix this logic
+                    // 
+                    int numToCook = Mathf.Min((batchLimit), itemQuantities[list[j]]);
+                    int num = itemQuantities[list[j]] - 20;
+                    itemQuantities[list[j]] = batchLimit;
+                    ItemInstance copy = list[j].GetCopy(num);
+                    list.Add(copy);
+                    itemQuantities.Add(copy, num);
+                }
+            }
+            list = (from x in list
+                    orderby itemQuantities[x] descending
+                    select x).ToList<ItemInstance>();
+            if (list.Count > 0)
+            {
+                primaryItem = list[0];
+                primaryItemQuantity = itemQuantities[list[0]];
+            }
+            else
+            {
+                primaryItem = null;
+                primaryItemQuantity = 0;
+            }
+            if (list.Count > 1)
+            {
+                secondaryItem = list[1];
+                secondaryItemQuantity = itemQuantities[list[1]];
+                return false;
+            }
+            secondaryItem = null;
+            secondaryItemQuantity = 0;
+
+            return false;
+        }
+    }
+
+    // cauldron patches
+    //[HarmonyPatch]
+    public static class CauldronPatches
+    {
+        public static ProduceMoreMod Mod;
+        // patch visuals for capacity
+        // TODO: show it filled up if quantity > 20
+        //[HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
+        //[HarmonyPrefix]
+        public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
+        {
+            int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
+            ItemInstance itemInstance;
+            int num;
+            ItemInstance itemInstance2;
+            int num2;
+            __instance.GetMainInputs(out itemInstance, out num, out itemInstance2, out num2);
+            if (itemInstance != null)
+            {
+                __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num / (float)cauldronCapacity);
+            }
+            else
+            {
+                __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
+            }
+            if (itemInstance2 != null)
+            {
+                __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num2 / (float)cauldronCapacity);
+                return false;
+            }
+            __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
+
+            return false;
+        }
+
+        // Patch cauldron input stack size
+        [HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
+        [HarmonyPrefix]
+        public static bool GetMainInputsPatch(Cauldron __instance, out ItemInstance primaryItem, out int primaryItemQuantity, out ItemInstance secondaryItem, out int secondaryItemQuantity)
+        {
+            int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
+            int stackSize = -1;
+            List<ItemInstance> list = new List<ItemInstance>();
+            Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
+            int i, k;
+            for (i = 0; i < __instance.IngredientSlots.Length; i = k + 1)
+            {
+                if (__instance.IngredientSlots[i].ItemInstance != null)
+                {
+                    if (stackSize == -1)
+                    {
+                        stackSize = __instance.IngredientSlots[i].ItemInstance.StackLimit;
+                    }
+                    ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.IngredientSlots[i].ItemInstance.ID);
+                    if (itemInstance == null || !itemInstance.CanStackWith(__instance.IngredientSlots[i].ItemInstance, false))
+                    {
+                        itemInstance = __instance.IngredientSlots[i].ItemInstance;
+                        list.Add(itemInstance);
+                        if (!itemQuantities.ContainsKey(__instance.IngredientSlots[i].ItemInstance))
+                        {
+                            itemQuantities.Add(__instance.IngredientSlots[i].ItemInstance, 0);
+                        }
+                    }
+                    itemQuantities[itemInstance] += __instance.IngredientSlots[i].Quantity;
+                }
+                k = i;
+            }
+            for (int j = 0; j < list.Count; j++)
+            {
+                if (itemQuantities[list[j]] > stackSize)
+                {
+                    int num = itemQuantities[list[j]] - stackSize;
+                    itemQuantities[list[j]] = stackSize;
+                    ItemInstance copy = list[j].GetCopy(num);
+                    list.Add(copy);
+                    itemQuantities.Add(copy, num);
+                }
+            }
+            list = (from x in list
+                    orderby itemQuantities[x] descending
+                    select x).ToList<ItemInstance>();
+            if (list.Count > 0)
+            {
+                primaryItem = list[0];
+                primaryItemQuantity = itemQuantities[list[0]];
+            }
+            else
+            {
+                primaryItem = null;
+                primaryItemQuantity = 0;
+            }
+            if (list.Count > 1)
+            {
+                secondaryItem = list[1];
+                secondaryItemQuantity = itemQuantities[list[1]];
+                return false;
+            }
+            secondaryItem = null;
+            secondaryItemQuantity = 0;
+
+            return false;
+        }
+
+        // speed
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
+        [HarmonyPrefix]
+        public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
+        {
+            if (!Mod.processedStationSpeeds.Contains(__instance.Station))
+            {
+                __instance.Station.CookTime = (int)((float)__instance.Station.CookTime / Mod.settings.GetStationSpeed("Cauldron"));
+            }
+        }
+    }
+        
         /*
-        // Patch lab oven capacity and speed
-        [HarmonyPatch]
-        public static class LabOvenPatches
-        {
-            public static ProduceMoreMod Mod;
-
-            // speed
-            [HarmonyPatch(typeof(OvenCookOperation), "GetCookDuration")]
-            [HarmonyPostfix]
-            public static void GetCookDurationPostfix(ref int __result)
-            {
-                __result = (int)(__result * Mod.settings.GetStationSpeed("LabOven"));
-            }
-
-            [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
-            [HarmonyPostfix]
-            public static void IsReadyPostfix(OvenCookOperation __instance, ref bool __result)
-            {
-                // Re-insert original method body.
-                __result = __instance.CookProgress >= __instance.GetCookDuration();
-            }
-
-            // patch to run our coroutine
-            [HarmonyPatch(typeof(StartLabOvenBehaviour), "RpcLogic__StartCook_2166136261")]
-            [HarmonyPrefix]
-            public static bool RpcLogic__StartCookPrefix(StartLabOvenBehaviour __instance) 
-            {
-                if (__instance.cookRoutine != null)
-                {
-                    return false;
-                }
-                if (__instance.targetOven == null)
-                {
-                    return false;
-                }
-                __instance.cookRoutine = __instance.StartCoroutine((Il2CppSystem.Collections.IEnumerator)CustomLabOvenCookRoutine(__instance));
-
-                return false;
-            }
-
-            // custom coroutine for capacity
-            private static System.Collections.IEnumerator CustomLabOvenCookRoutine(StartLabOvenBehaviour instance)
-            {
-                MelonLogger.Msg($"Starting custom laboven cook...", null);
-                instance.targetOven.SetNPCUser(instance.Npc.NetworkObject);
-                instance.Npc.Movement.FacePoint(instance.targetOven.transform.position, 0.5f);
-                yield return new WaitForSeconds(0.5f);
-                if (!instance.CanCookStart())
-                {
-                    instance.StopCook();
-                    instance.End_Networked(null);
-                    yield break;
-                }
-                instance.targetOven.Door.SetPosition(1f);
-                yield return new WaitForSeconds(0.5f);
-                instance.targetOven.WireTray.SetPosition(1f);
-                yield return new WaitForSeconds(5f);
-                instance.targetOven.Door.SetPosition(0f);
-                yield return new WaitForSeconds(1f);
-                ItemInstance itemInstance = instance.targetOven.IngredientSlot.ItemInstance;
-                if (itemInstance == null)
-                {
-                    instance.StopCook();
-                    instance.End_Networked(null);
-                    yield break;
-                }
-                int num = 1;
-                if ((itemInstance.Definition as StorableItemDefinition).StationItem.GetModule<CookableModule>().CookType == CookableModule.ECookableType.Solid)
-                {
-                    num = Mathf.Min(instance.targetOven.IngredientSlot.Quantity, Mod.settings.GetStationCapacity("LabOven"));
-                }
-                itemInstance.ChangeQuantity(-num);
-                string id = (itemInstance.Definition as StorableItemDefinition).StationItem.GetModule<CookableModule>().Product.ID;
-                EQuality ingredientQuality = EQuality.Standard;
-                if (itemInstance is QualityItemInstance)
-                {
-                    ingredientQuality = (itemInstance as QualityItemInstance).Quality;
-                }
-                instance.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, id));
-                instance.StopCook();
-                instance.End_Networked(null);
-                yield break;
-            }
-        }
-
-        // Patch mixing station capacity and speed
-        //[HarmonyPatch]
-        public static class MixingStationPatches
-        {
-            public static ProduceMoreMod Mod;
-
-            // speed
-            // may be unnecessary?
-            [HarmonyPatch(typeof(StartMixingStationBehaviour), "RpcLogic___StartCook_2166136261")]
-            [HarmonyPrefix]
-            public static bool RpcLogic__StartCookPrefix(StartMixingStationBehaviour __instance)
-            {
-                if (__instance.startRoutine != null)
-                {
-                    return false;
-                }
-                if (__instance.targetStation == null)
-                {
-                    return false;
-                }
-                __instance.startRoutine = __instance.StartCoroutine((Il2CppSystem.Collections.IEnumerator)CustomMixingStationCookRoutine(__instance));
-
-                return false;
-            }
-
-            // may be unnecessary?
-            private static System.Collections.IEnumerator CustomMixingStationCookRoutine(StartMixingStationBehaviour instance)
-            {
-                instance.Npc.Movement.FacePoint(instance.targetStation.transform.position, 0.5f);
-                yield return new WaitForSeconds(0.5f);
-                if (!instance.CanCookStart())
-                {
-                    instance.StopCook();
-                    instance.End_Networked(null);
-                    yield break;
-                }
-                instance.targetStation.SetNPCUser(instance.Npc.NetworkObject);
-                instance.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
-                QualityItemInstance product = instance.targetStation.ProductSlot.ItemInstance as QualityItemInstance;
-                ItemInstance mixer = instance.targetStation.MixerSlot.ItemInstance;
-                int mixQuantity = instance.targetStation.GetMixQuantity();
-                int num;
-                for (int i = 0; i < mixQuantity; i = num + 1)
-                {
-                    //yield return new WaitForSeconds(1f * Mod.settings.GetStationSpeed("MixingStation"));
-                    yield return new WaitForSeconds(1f);
-                    num = i;
-                }
-                if (InstanceFinder.IsServer)
-                {
-                    instance.targetStation.ProductSlot.ChangeQuantity(-mixQuantity, false);
-                    instance.targetStation.MixerSlot.ChangeQuantity(-mixQuantity, false);
-                    MixOperation operation = new MixOperation(product.ID, product.Quality, mixer.ID, mixQuantity);
-                    instance.targetStation.SendMixingOperation(operation, 0);
-                }
-                instance.StopCook();
-                instance.End_Networked(null);
-                yield break;
-            }
-
-            // capacity
-            [HarmonyPatch(typeof(MixingStation), "GetMixQuantity")]
-            [HarmonyPrefix]
-            public static void GetMixQuantityPrefix(MixingStation __instance)
-            {
-                if (Mod.processedStationCapacities.Contains(__instance))
-                {
-                    __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
-                }
-            }
-
-            // probably unnecessary
-            [HarmonyPatch(typeof(MixingStation), "CanStartMix")]
-            [HarmonyPostfix]
-            public static void CanStartMixPostfix(MixingStation __instance, ref bool __result)
-            {
-                // re-insert original method body.
-                __result = __instance.GetMixQuantity() > 0 && __instance.OutputSlot.Quantity == 0;
-            }
-
-            // speed
-            [HarmonyPatch(typeof(MixingStation), "GetMixTimeForCurrentOperation")]
-            [HarmonyPrefix]
-            public static bool GetMixTimePrefix(MixingStation __instance, ref int __result)
-            {
-                if (!Mod.processedStationSpeeds.Contains(__instance))
-                {
-                    __instance.MixTimePerItem = (int)(15f * Mod.settings.GetStationSpeed("MixingStation"));
-                    Mod.processedStationSpeeds.Add(__instance);
-                }
-
-                if (__instance.CurrentMixOperation == null)
-                {
-                    __result = 0;
-                }
-                __result = __instance.MixTimePerItem * __instance.CurrentMixOperation.Quantity;
-
-                return false;
-            }
-        }
-
-        // Brick press patches
-        //[HarmonyPatch]
-        public static class BrickPressPatches
-        {
-            public static ProduceMoreMod Mod;
-            // capacity
-            //[HarmonyPatch(typeof(BrickPress), "GetMainInputs")]
-            public static bool GetMainInputsPrefix(BrickPress __instance, ref ItemInstance primaryItem, ref int primaryItemQuantity, ref ItemInstance secondaryItem, ref int secondaryItemQuantity)
-            {
-                int batchLimit = Mod.settings.GetStationCapacity("BrickPress");
-                List<ItemInstance> list = new List<ItemInstance>();
-                Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
-                int i, k;
-                for (i = 0; i < __instance.InputSlots.Count; i = k + 1)
-                {
-                    if (__instance.InputSlots[i].ItemInstance != null)
-                    {
-                        ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.InputSlots[i].ItemInstance.ID);
-                        if (itemInstance == null || !itemInstance.CanStackWith(__instance.InputSlots[i].ItemInstance, false))
-                        {
-                            itemInstance = __instance.InputSlots[i].ItemInstance;
-                            list.Add(itemInstance);
-                            if (!itemQuantities.ContainsKey(__instance.InputSlots[i].ItemInstance))
-                            {
-                                itemQuantities.Add(__instance.InputSlots[i].ItemInstance, 0);
-                            }
-                        }
-                        ItemInstance key = itemInstance;
-                        itemQuantities[key] += __instance.InputSlots[i].Quantity;
-                    }
-                    k = i;
-                }
-                for (int j = 0; j < list.Count; j++)
-                {
-                    if (itemQuantities[list[j]] > 20)
-                    {
-                        //TODO: fix this logic
-                        int num = itemQuantities[list[j]] - batchLimit;
-                        itemQuantities[list[j]] = batchLimit;
-                        ItemInstance copy = list[j].GetCopy(num);
-                        list.Add(copy);
-                        itemQuantities.Add(copy, num);
-                    }
-                }
-                list = (from x in list
-                        orderby itemQuantities[x] descending
-                        select x).ToList<ItemInstance>();
-                if (list.Count > 0)
-                {
-                    primaryItem = list[0];
-                    primaryItemQuantity = itemQuantities[list[0]];
-                }
-                else
-                {
-                    primaryItem = null;
-                    primaryItemQuantity = 0;
-                }
-                if (list.Count > 1)
-                {
-                    secondaryItem = list[1];
-                    secondaryItemQuantity = itemQuantities[list[1]];
-                    return false;
-                }
-                secondaryItem = null;
-                secondaryItemQuantity = 0;
-
-                return false;
-            }
-        }
-
-        // cauldron patches
-        //[HarmonyPatch]
-        public static class CauldronPatches
-        {
-            public static ProduceMoreMod Mod;
-            // patch visuals for capacity
-            // TODO: show it filled up if quantity > 20
-            [HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
-            [HarmonyPrefix]
-            public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
-            {
-                int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
-                ItemInstance itemInstance;
-                int num;
-                ItemInstance itemInstance2;
-                int num2;
-                __instance.GetMainInputs(out itemInstance, out num, out itemInstance2, out num2);
-                if (itemInstance != null)
-                {
-                    __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num / (float)cauldronCapacity);
-                }
-                else
-                {
-                    __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
-                }
-                if (itemInstance2 != null)
-                {
-                    __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num2 / (float)cauldronCapacity);
-                    return false;
-                }
-                __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
-
-                return false;
-            }
-
-            // Patch cauldron input stack size
-            [HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
-            [HarmonyPrefix]
-            public static bool GetMainInputsPatch(Cauldron __instance, out ItemInstance primaryItem, out int primaryItemQuantity, out ItemInstance secondaryItem, out int secondaryItemQuantity)
-            {
-                int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
-                int stackSize = -1;
-                List<ItemInstance> list = new List<ItemInstance>();
-                Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
-                int i, k;
-                for (i = 0; i < __instance.IngredientSlots.Length; i = k + 1)
-                {
-                    if (__instance.IngredientSlots[i].ItemInstance != null)
-                    {
-                        if (stackSize == -1)
-                        {
-                            stackSize = __instance.IngredientSlots[i].ItemInstance.StackLimit;
-                        }
-                        ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.IngredientSlots[i].ItemInstance.ID);
-                        if (itemInstance == null || !itemInstance.CanStackWith(__instance.IngredientSlots[i].ItemInstance, false))
-                        {
-                            itemInstance = __instance.IngredientSlots[i].ItemInstance;
-                            list.Add(itemInstance);
-                            if (!itemQuantities.ContainsKey(__instance.IngredientSlots[i].ItemInstance))
-                            {
-                                itemQuantities.Add(__instance.IngredientSlots[i].ItemInstance, 0);
-                            }
-                        }
-                        itemQuantities[itemInstance] += __instance.IngredientSlots[i].Quantity;
-                    }
-                    k = i;
-                }
-                for (int j = 0; j < list.Count; j++)
-                {
-                    if (itemQuantities[list[j]] > stackSize)
-                    {
-                        int num = itemQuantities[list[j]] - stackSize;
-                        itemQuantities[list[j]] = stackSize;
-                        ItemInstance copy = list[j].GetCopy(num);
-                        list.Add(copy);
-                        itemQuantities.Add(copy, num);
-                    }
-                }
-                list = (from x in list
-                        orderby itemQuantities[x] descending
-                        select x).ToList<ItemInstance>();
-                if (list.Count > 0)
-                {
-                    primaryItem = list[0];
-                    primaryItemQuantity = itemQuantities[list[0]];
-                }
-                else
-                {
-                    primaryItem = null;
-                    primaryItemQuantity = 0;
-                }
-                if (list.Count > 1)
-                {
-                    secondaryItem = list[1];
-                    secondaryItemQuantity = itemQuantities[list[1]];
-                    return false;
-                }
-                secondaryItem = null;
-                secondaryItemQuantity = 0;
-
-                return false;
-            }
-
-            // speed
-            [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
-            [HarmonyPrefix]
-            public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
-            {
-                if (!Mod.processedStationSpeeds.Contains(__instance.Station))
-                {
-                    __instance.Station.CookTime = (int)((float)__instance.Station.CookTime * Mod.settings.GetStationSpeed("Cauldron"));
-                }
-            }
-         }
-
 
         // packaging station patches
         //[HarmonyPatch]
@@ -626,7 +542,7 @@ namespace ProduceMore
 
         }
 
-
+        /*
         // pot patches
         //[HarmonyPatch]
         public static class PotPatches
@@ -642,5 +558,4 @@ namespace ProduceMore
             }
         }
         */
-    }
 }
