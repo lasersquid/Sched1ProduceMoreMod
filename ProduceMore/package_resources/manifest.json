@@ -1,0 +1,9 @@
+{
+    "name": "OvensCookFaster%%ARCH%%",
+    "version_number": "%%VERSION%%",
+    "website_url": "https://github.com/lasersquid/Sched1OvensCookFasterMod",
+    "description": "Makes ovens cook in a quarter of the usual time. %%ARCH%% version.",
+    "dependencies": [
+	"LavaGang-MelonLoader-0.7.0"
+    ]
+}
