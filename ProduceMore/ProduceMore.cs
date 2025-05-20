@@ -327,7 +327,7 @@ namespace ProduceMore
         }
     }
 
-    /*
+
     // Brick press patches
     [HarmonyPatch]
     public static class BrickPressPatches
@@ -365,10 +365,9 @@ namespace ProduceMore
                 if (itemQuantities[list[j]] > 20)
                 {
                     //TODO: fix this logic
-                    // 
-                    int numToCook = Mathf.Min((batchLimit), itemQuantities[list[j]]);
-                    int num = itemQuantities[list[j]] - 20;
-                    itemQuantities[list[j]] = batchLimit;
+                    int numToPress = Mathf.Min((batchLimit), itemQuantities[list[j]]);
+                    int num = itemQuantities[list[j]] - numToPress;
+                    itemQuantities[list[j]] = numToPress;
                     ItemInstance copy = list[j].GetCopy(num);
                     list.Add(copy);
                     itemQuantities.Add(copy, num);
@@ -401,14 +400,14 @@ namespace ProduceMore
     }
 
     // cauldron patches
-    //[HarmonyPatch]
+    [HarmonyPatch]
     public static class CauldronPatches
     {
         public static ProduceMoreMod Mod;
         // patch visuals for capacity
         // TODO: show it filled up if quantity > 20
-        //[HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
-        //[HarmonyPrefix]
+        [HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
+        [HarmonyPrefix]
         public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
         {
             int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
@@ -436,8 +435,8 @@ namespace ProduceMore
         }
 
         // Patch cauldron input stack size
-        [HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
-        [HarmonyPrefix]
+        //[HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
+        //[HarmonyPrefix]
         public static bool GetMainInputsPatch(Cauldron __instance, out ItemInstance primaryItem, out int primaryItemQuantity, out ItemInstance secondaryItem, out int secondaryItemQuantity)
         {
             int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
@@ -508,9 +507,21 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
         {
-            if (!Mod.processedStationSpeeds.Contains(__instance.Station))
+            int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
+            if (__instance.Station.CookTime != newCookTime)
             {
-                __instance.Station.CookTime = (int)((float)__instance.Station.CookTime / Mod.settings.GetStationSpeed("Cauldron"));
+                __instance.Station.CookTime = newCookTime;
+            }
+        }
+
+        [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
+        [HarmonyPrefix]
+        public static void StartCookOperationPrefix(Cauldron __instance)
+        {
+            int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
+            if (__instance.CookTime != newCookTime)
+            {
+                __instance.CookTime = newCookTime;
             }
         }
     }

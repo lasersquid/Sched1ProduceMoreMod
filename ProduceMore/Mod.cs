@@ -88,8 +88,8 @@ namespace ProduceMore
 			DryingRackPatches.Mod = this;
 			LabOvenPatches.Mod = this;
             MixingStationPatches.Mod = this;
-            //BrickPressPatches.Mod = this;
-			//CauldronPatches.Mod = this;
+            BrickPressPatches.Mod = this;
+			CauldronPatches.Mod = this;
 			//PackagingStationPatches.Mod = this;
 			//PotPatches.Mod = this;
 			
