@@ -21,6 +21,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Diagnostics.Runtime;
 using System.Linq;
 using Il2CppSystem;
+using Il2CppScheduleOne.StationFramework;
 
 
 [assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.0", "lasersquid", null)]
@@ -33,6 +34,7 @@ namespace ProduceMore
 		public HashSet<GridItem> processedStationCapacities = new HashSet<GridItem>();
 		public HashSet<GridItem> processedStationSpeeds = new HashSet<GridItem>();
 		public HashSet<ItemDefinition> processedDefs = new HashSet<ItemDefinition>();
+		public HashSet<StationRecipe> processedRecipes = new HashSet<StationRecipe>();
 		public ModSettings settings;
 		public const string settingsFileName = "ProduceMoreSettings.json";
 
@@ -90,8 +92,9 @@ namespace ProduceMore
             MixingStationPatches.Mod = this;
             BrickPressPatches.Mod = this;
 			CauldronPatches.Mod = this;
-			//PackagingStationPatches.Mod = this;
-			//PotPatches.Mod = this;
+			PackagingStationPatches.Mod = this;
+			PotPatches.Mod = this;
+			ChemistryStationPatches.Mod = this;
 			
         }
 	
@@ -155,18 +158,12 @@ namespace ProduceMore
 			stationSpeeds.Add("MixingStation", 1);
 			stationSpeeds.Add("MixingStationMk2", 1);
 			stationSpeeds.Add("PackagingStation", 1);
-			stationSpeeds.Add("BrickPress", 1);
+			stationSpeeds.Add("Pot", 1);
 
 			// Station processing capacities
-			// Missing definition for chemistry station, since it doesn't have
-			// a processing capacity per se.
-			stationCapacities.Add("LabOven", 10);
-			stationCapacities.Add("Cauldron", 20);
 			stationCapacities.Add("DryingRack", 20);
 			stationCapacities.Add("MixingStation", 20);
-			stationCapacities.Add("MixingStationMk2", 20);
 			stationCapacities.Add("PackagingStation", 20);
-			stationCapacities.Add("BrickPress", 20);
 }
 		
 		public int GetStackLimit(ItemInstance item)
@@ -182,6 +179,30 @@ namespace ProduceMore
 			}
 
 			return stackLimit;
+		}
+
+		public int GetStackLimit(string itemName, EItemCategory category)
+		{
+			int stackLimit = 10;
+
+			if (!stackOverrides.TryGetValue(itemName, out stackLimit))
+			{
+				if (!stackSizes.TryGetValue(category, out stackLimit))
+				{
+					MelonLogger.Msg($"Couldn't find stack size for item {itemName} with category {category}");
+				}
+			}
+			return stackLimit;
+		}
+
+		public int GetStackSizeForCocaLeaf()
+		{
+			int stackSize = 20;
+			if (!stackOverrides.TryGetValue("Coca Leaf", out stackSize))
+			{
+				stackSizes.TryGetValue(EItemCategory.Growing, out stackSize);
+			}
+			return stackSize;
 		}
 
 		public int GetStationCapacity(string station)
@@ -214,22 +235,25 @@ namespace ProduceMore
 // increase stack limits by category, with individual overrides - done
 // increase processing limit and speed of lab stations
 //	- chem station (possible/sensical?) - might do
-//	- lab oven - done
-//	- drying rack - done
-//	- mixing station - done
+//	- lab oven - speed done; won't do capacity
+//	- drying rack - done - speed & capacity
+//	- mixing station - done - speed & capacity
 //	- brick press - might do
 //	- packaging station - done
-//  - cauldron - done
+//  - cauldron - done - speed; capacity does itself
 // add plant growth multiplier - done
-// increase stack limit in cauldron - done
+// increase stack limit in cauldron - done. or maybe it did itself?
+// cash stack size
+// detect malformed settings
 
 
 // Testing:
 // ItemInstancePatches - working
-// DryingRackPatches - capacity working, speed working, wrote my first transpiler patch
-// LabOvenPatches - 
-// MixingStationPatches
-// BrickPressPatches
-// CauldronPatches
-// PackagingStationPatches
-// PotPatches
+// ChemStationPatches - speed working; UI needs update
+// DryingRackPatches - working
+// LabOvenPatches - working
+// MixingStationPatches - working, except worker sometimes gets stuck? might not be my fault
+// BrickPressPatches - working
+// CauldronPatches - working
+// PackagingStationPatches - working
+// PotPatches - working

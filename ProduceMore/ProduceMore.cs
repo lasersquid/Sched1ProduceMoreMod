@@ -112,8 +112,8 @@ namespace ProduceMore
         }
 
         // maybe unnecessary
-        [HarmonyPatch(typeof(DryingRack), "StartOperation")]
-        [HarmonyPrefix]
+        //[HarmonyPatch(typeof(DryingRack), "StartOperation")]
+        //[HarmonyPrefix]
         public static void StartOperationPrefix(DryingRack __instance)
         {
             if (__instance != null && __instance.ItemCapacity != Mod.settings.GetStationCapacity("DryingRack"))
@@ -155,7 +155,6 @@ namespace ProduceMore
         }
 
         // modified copy of DryingRack.MinPass
-        //public static void NewMinPass(DryingRack __instance)
         [HarmonyPatch(typeof(DryingRack), "MinPass")]
         [HarmonyPrefix]
         public static bool MinPassPrefix(DryingRack __instance)
@@ -281,10 +280,10 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool GetMixQuantityPrefix(MixingStation __instance, ref int __result)
         {
-            if (!Mod.processedStationCapacities.Contains(__instance))
+            if (__instance.MaxMixQuantity != Mod.settings.GetStationCapacity("MixingStation"))
             {
                 __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
-                Mod.processedStationCapacities.Add(__instance);
+                MelonLogger.Msg($"Setting mixer capacity from GetMixQuantityPrefix for {__instance.GetHashCode()} from {__instance.MaxMixQuantity} to {Mod.settings.GetStationCapacity("MixingStation")}");
             }
 
             if (__instance.GetProduct() == null || __instance.GetMixer() == null)
@@ -310,20 +309,42 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool GetMixTimePrefix(MixingStation __instance, ref int __result)
         {
-            int mixTimePerItem = (int)(15f / Mod.settings.GetStationSpeed("MixingStation"));
+            float mixTimePerItem = (int)(15f / Mathf.Max(Mod.settings.GetStationSpeed("MixingStation"), 0.01f));
             if (__instance.MixTimePerItem != mixTimePerItem)
             {
-                __instance.MixTimePerItem = mixTimePerItem;
-                Mod.processedStationSpeeds.Add(__instance);
+                __instance.MixTimePerItem = (int)mixTimePerItem;
             }
 
             if (__instance.CurrentMixOperation == null)
             {
                 __result = 0;
+                return false;
             }
-            __result = __instance.MixTimePerItem * __instance.CurrentMixOperation.Quantity;
+            __result = (int)(mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity);
 
             return false;
+        }
+
+        [HarmonyPatch(typeof(StartMixingStationBehaviour), "StartCook")]
+        [HarmonyPrefix]
+        public static void StartCookPrefix(StartMixingStationBehaviour __instance)
+        {
+            if (__instance.targetStation.MaxMixQuantity != Mod.settings.GetStationCapacity("MixingStation"))
+            {
+                __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+            }
+        }
+
+        // probably unnecessary
+        //[HarmonyPatch(typeof(StartMixingStationBehaviour), "CanCookStart")]
+        //[HarmonyPrefix]
+        public static void CanCookStartPrefix(StartMixingStationBehaviour __instance)
+        {
+            if (__instance.targetStation.MaxMixQuantity != Mod.settings.GetStationCapacity("MixingStation"))
+            {
+                __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+            }
+
         }
     }
 
@@ -334,10 +355,12 @@ namespace ProduceMore
     {
         public static ProduceMoreMod Mod;
         // capacity
+        // probably unnecessary
         //[HarmonyPatch(typeof(BrickPress), "GetMainInputs")]
+        //[HarmonyPrefix]
         public static bool GetMainInputsPrefix(BrickPress __instance, ref ItemInstance primaryItem, ref int primaryItemQuantity, ref ItemInstance secondaryItem, ref int secondaryItemQuantity)
         {
-            int batchLimit = Mod.settings.GetStationCapacity("BrickPress");
+            int stackSize = Mod.settings.GetStationCapacity("BrickPress");
             List<ItemInstance> list = new List<ItemInstance>();
             Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
             int i, k;
@@ -362,12 +385,10 @@ namespace ProduceMore
             }
             for (int j = 0; j < list.Count; j++)
             {
-                if (itemQuantities[list[j]] > 20)
+                if (itemQuantities[list[j]] > stackSize)
                 {
-                    //TODO: fix this logic
-                    int numToPress = Mathf.Min((batchLimit), itemQuantities[list[j]]);
-                    int num = itemQuantities[list[j]] - numToPress;
-                    itemQuantities[list[j]] = numToPress;
+                    int num = itemQuantities[list[j]] - stackSize;
+                    itemQuantities[list[j]] = stackSize;
                     ItemInstance copy = list[j].GetCopy(num);
                     list.Add(copy);
                     itemQuantities.Add(copy, num);
@@ -405,12 +426,11 @@ namespace ProduceMore
     {
         public static ProduceMoreMod Mod;
         // patch visuals for capacity
-        // TODO: show it filled up if quantity > 20
         [HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
         [HarmonyPrefix]
         public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
         {
-            int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
+            int cauldronCapacity = Mod.settings.GetStackLimit("Coca Leaf", EItemCategory.Growing);
             ItemInstance itemInstance;
             int num;
             ItemInstance itemInstance2;
@@ -435,6 +455,7 @@ namespace ProduceMore
         }
 
         // Patch cauldron input stack size
+        // maybe unnecessary        
         //[HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
         //[HarmonyPrefix]
         public static bool GetMainInputsPatch(Cauldron __instance, out ItemInstance primaryItem, out int primaryItemQuantity, out ItemInstance secondaryItem, out int secondaryItemQuantity)
@@ -525,48 +546,65 @@ namespace ProduceMore
             }
         }
     }
-        
-        /*
 
-        // packaging station patches
-        //[HarmonyPatch]
-        public static class PackagingStationPatches
+
+    // packaging station patches
+    [HarmonyPatch]
+    public static class PackagingStationPatches
+    {
+        public static ProduceMoreMod Mod;
+
+        // speed
+        [HarmonyPatch(typeof(PackagingStationBehaviour), "BeginPackaging")]
+        [HarmonyPrefix]
+        public static void BeginPackagingPrefix(PackagingStationBehaviour __instance)
         {
-            public static ProduceMoreMod Mod;
-            // speed
-            [HarmonyPatch(typeof(PackagingStationBehaviour), "BeginPackaging")]
-            [HarmonyPrefix]
-            public static void BeginPackagingPrefix(PackagingStationBehaviour __instance) 
+            float stationSpeed = Mod.settings.GetStationSpeed("PackagingStation");
+            if (__instance.Station.PackagerEmployeeSpeedMultiplier != stationSpeed)
             {
-                // set PackagingStation.PackagerEmployeeSpeedMultiplier
-                if (Mod.processedStationSpeeds.Contains(__instance.Station))
-                {
-                    __instance.Station.PackagerEmployeeSpeedMultiplier = 
-                        (int)((float)__instance.Station.PackagerEmployeeSpeedMultiplier 
-                         * Mod.settings.GetStationSpeed("PackagingStation"));
-                    Mod.processedStationSpeeds.Add(__instance.Station);
-                }
-
-            }
-
-            // capacity I think will like as itself?
-
-        }
-
-        /*
-        // pot patches
-        //[HarmonyPatch]
-        public static class PotPatches
-        {
-            public static ProduceMoreMod Mod;
-
-            // speed
-            [HarmonyPatch(typeof(Pot), "GetAverageLightExposure")]
-            public static void GetAverageLightExposurePostfix(Pot __instance, ref float growSpeedMultiplier, ref float __result)
-            {
-                growSpeedMultiplier = growSpeedMultiplier * Mod.settings.GetStationSpeed("Pot");
-                __result = __result * Mod.settings.GetStationSpeed("Pot");
+                __instance.Station.PackagerEmployeeSpeedMultiplier = stationSpeed;
             }
         }
-        */
+        // capacity takes care of itself
+    }
+
+    // pot patches
+    [HarmonyPatch]
+    public static class PotPatches
+    {
+        public static ProduceMoreMod Mod;
+
+        // speed
+        [HarmonyPatch(typeof(Pot), "GetAdditiveGrowthMultiplier")]
+        [HarmonyPostfix]
+        public static void GetAdditiveGrowthMultiplierPostfix(ref float __result)
+        {
+            __result = __result * Mod.settings.GetStationSpeed("Pot");
+        }
+    }
+
+    [HarmonyPatch]
+    public static class ChemistryStationPatches
+    {
+        public static ProduceMoreMod Mod;
+
+        [HarmonyPatch(typeof(StationRecipeEntry), "AssignRecipe")]
+        [HarmonyPostfix]
+        public static void AssignRecipePostfix(StationRecipeEntry __instance, ref StationRecipe recipe)
+        {
+            if (!Mod.processedRecipes.Contains(recipe))
+            {
+                __instance.Recipe.CookTime_Mins = (int)((float)__instance.Recipe.CookTime_Mins / Mod.settings.GetStationSpeed("ChemistryStation"));
+                Mod.processedRecipes.Add(__instance.Recipe);
+                Mod.LoggerInstance.Msg($"\n\n\nProcessed recipe {__instance.Recipe.GetHashCode()}\n\n\n");
+            }
+            int hours = __instance.Recipe.CookTime_Mins / 60;
+            int minutes = __instance.Recipe.CookTime_Mins % 60;
+            __instance.CookingTimeLabel.text = $"{hours}h";
+            if (minutes > 0)
+            {
+                __instance.CookingTimeLabel.text += $" {minutes}m";
+            }
+        }
+    }
 }
