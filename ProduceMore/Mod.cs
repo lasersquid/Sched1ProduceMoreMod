@@ -245,6 +245,12 @@ namespace ProduceMore
 // increase stack limit in cauldron - done. or maybe it did itself?
 // cash stack size
 // detect malformed settings
+// keep dict of default settings
+// refresh processed<stations/recipes> when returning to title screen/on settings update
+// phone app for configuration
+// support for changing settings on the fly
+// replace melonlogger.msg with Mod.LoggerInstance.Msg
+//
 
 
 // Testing:
@@ -257,3 +263,4 @@ namespace ProduceMore
 // CauldronPatches - working
 // PackagingStationPatches - working
 // PotPatches - working
+// CashPatches - upcoming
