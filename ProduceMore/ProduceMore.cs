@@ -531,7 +531,7 @@ namespace ProduceMore
                                 float num3;
                                 // it's probably this conditional that's failing.
                                 // how to safely tell if this condition is true?
-                                if (itemSlot is CashSlot)
+                                if (itemSlot.TryCast<CashSlot>() != null)
                                 {
                                     Mod.LoggerInstance.Msg($"itemSlot {itemSlot.Pointer} is CashSlot.");
                                     if (IsPlayerCashSlot(itemSlot))
@@ -640,7 +640,7 @@ namespace ProduceMore
                     {
                         CashInstance cashInstance2 = __instance.HoveredSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
                         Mod.LoggerInstance.Msg($"cashInstance2 is {cashInstance2.Pointer}, balance is {cashInstance2.Balance}");
-                        if (__instance.HoveredSlot.assignedSlot is CashSlot)
+                        if (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot>() != null)
                         {
                             Mod.LoggerInstance.Msg($"__instance.HoveredSlot.assignedSlot {__instance.HoveredSlot.assignedSlot.Pointer} is CashSlot.");
                             if (IsPlayerCashSlot(__instance.HoveredSlot.assignedSlot))
