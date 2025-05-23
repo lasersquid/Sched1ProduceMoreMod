@@ -1,76 +1,78 @@
 ﻿using HarmonyLib;
 using UnityEngine;
-using MelonLoader;
-using System.Collections;
-using Il2CppScheduleOne.Management;
-using Il2CppScheduleOne.Persistence.Loaders;
-using System.Reflection.Emit;
-using Il2CppScheduleOne.Tiles;
-using Il2CppScheduleOne.DevUtilities;
-
-using Unity.Jobs.LowLevel.Unsafe;
-using Il2CppScheduleOne.GameTime;
-using System.Runtime.CompilerServices;
-using System.Reflection;
-using Il2CppScheduleOne.Map;
-using Il2Cpp;
-using Il2CppScheduleOne.UI.Stations;
-using Il2CppScheduleOne.UI.Stations.Drying_rack;
-using static UnityEngine.ExpressionEvaluator;
-using Il2CppFishNet.Managing;
-
-using Il2CppFishNet.Serializing;
-
-
-
-
-
-
-
-
-
 
 #if MONO_BUILD
 using FishNet;
-using ScheduleOne.NPCs.Behaviour;
-using ScheduleOne.StationFramework;
-using System.Runtime.InteropServices;
-using ScheduleOne.ObjectScripts;
+using ScheduleOne.DevUtilities;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Money;
+using ScheduleOne.NPCs.Behaviour;
+using ScheduleOne.ObjectScripts;
+using ScheduleOne.PlayerScripts;
+using ScheduleOne.StationFramework;
+using ScheduleOne.UI.Items;
+using ScheduleOne.UI.Phone.Delivery;
+using ScheduleOne.UI.Shop;
+using ScheduleOne.UI.Stations.Drying_rack;
+using ScheduleOne.UI.Stations;
+using ScheduleOne.UI;
 using ScheduleOne;
+using TMPro;
 #else
-using Il2CppScheduleOne.NPCs.Behaviour;
-using Il2CppScheduleOne.StationFramework;
-using Il2CppSystem.Runtime.InteropServices;
-using Il2CppScheduleOne.ObjectScripts;
-using Il2CppScheduleOne.ItemFramework;
-using Il2CppSystem.Collections;
-using Il2CppScheduleOne;
-using Il2CppScheduleOne.EntityFramework;
 using Il2CppFishNet;
-using Il2CppFishNet.Object;
-using Il2CppFishNet.Transporting;
+using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Money;
+using Il2CppScheduleOne.NPCs.Behaviour;
+using Il2CppScheduleOne.ObjectScripts;
+using Il2CppScheduleOne.PlayerScripts;
+using Il2CppScheduleOne.StationFramework;
+using Il2CppScheduleOne.UI.Items;
+using Il2CppScheduleOne.UI.Phone.Delivery;
+using Il2CppScheduleOne.UI.Shop;
+using Il2CppScheduleOne.UI.Stations.Drying_rack;
+using Il2CppScheduleOne.UI.Stations;
+using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne;
+using Il2CppTMPro;
 #endif
 
 namespace ProduceMore
 {
     //Set stack sizes
     [HarmonyPatch]
-    public class ItemInstancePatches
+    public class ItemCapacityPatches
     {
         public static ProduceMoreMod Mod = null;
 
-        // Increase stack limit
+        // Increase stack limit on item access
         [HarmonyPatch(typeof(ItemInstance), "StackLimit", MethodType.Getter)]
         [HarmonyPrefix]
         public static void StackLimitPostfix(ItemInstance __instance)
         {
-            if (!Mod.processedDefs.Contains(__instance.Definition))
+            if (!Mod.processedDefs.Contains(__instance.Definition) && __instance.Definition.Name.ToLower() != "cash")
             {
                 int stackLimit = Mod.settings.GetStackLimit(__instance);
                 __instance.Definition.StackLimit = stackLimit;
                 Mod.processedDefs.Add(__instance.Definition);
-                MelonLogger.Msg($"Set stack limit for {__instance.Definition.Name} to {stackLimit}");
+                Mod.LoggerInstance.Msg($"Set stacklimit of {__instance.Definition.Name} to {stackLimit}.");
+                
+            }
+        }
+
+        // For shops
+        [HarmonyPatch(typeof(ListingEntry), "Initialize")]
+        [HarmonyPrefix]
+        public static void InitializePrefix(ShopListing match)
+        {
+            if (match != null)
+            {
+                if (!Mod.processedDefs.Contains(match.Item))
+                {
+                    int stackLimit = Mod.settings.GetStackLimit(match.Item);
+                    match.Item.StackLimit = stackLimit;
+                    Mod.processedDefs.Add(match.Item);
+                }
             }
         }
     }
@@ -85,18 +87,17 @@ namespace ProduceMore
         // Modify DryingRack.ItemCapacity
         [HarmonyPatch(typeof(StartDryingRackBehaviour), "IsRackReady")]
         [HarmonyPrefix]
-        public static bool IsRackReadyPrefix(DryingRack rack, ref bool __result)
+        public static void IsRackReadyPrefix(DryingRack rack, ref bool __result)
         {
             if (rack != null && rack.ItemCapacity != Mod.settings.GetStationCapacity("DryingRack"))
             {
                 rack.ItemCapacity = Mod.settings.GetStationCapacity("DryingRack");
             }
-            return true;
         }
 
         // Modify DryingRack.ItemCapacity
         // canstartoperation runs every time a player or npc tries to interact
-        // may have optimized away real access to ItemCapacity??
+        // may have optimized away real access to ItemCapacity
         [HarmonyPatch(typeof(DryingRack), "CanStartOperation")]
         [HarmonyPrefix]
         public static bool CanStartOperationPrefix(DryingRack __instance, ref bool __result)
@@ -109,17 +110,6 @@ namespace ProduceMore
             __result = __instance.GetTotalDryingItems() < __instance.ItemCapacity && __instance.InputSlot.Quantity != 0 && !__instance.InputSlot.IsLocked && !__instance.InputSlot.IsRemovalLocked;
 
             return false;
-        }
-
-        // maybe unnecessary
-        //[HarmonyPatch(typeof(DryingRack), "StartOperation")]
-        //[HarmonyPrefix]
-        public static void StartOperationPrefix(DryingRack __instance)
-        {
-            if (__instance != null && __instance.ItemCapacity != Mod.settings.GetStationCapacity("DryingRack"))
-            {
-                __instance.ItemCapacity = Mod.settings.GetStationCapacity("DryingRack");
-            }
         }
 
         // fix drying operation progress meter
@@ -184,58 +174,6 @@ namespace ProduceMore
             return false;
         }
 
-        // baby's first transpiler patch
-        /*
-        // patch minpass to call into our NewMinPass routine, instead of jumping to IL2CPP ether
-        [HarmonyPatch(typeof(DryingRack), "MinPass")]
-        [HarmonyTranspiler]
-        public static IEnumerable<CodeInstruction> MinPassTranspiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
-        {
-            MelonLogger.Msg($"Transpiler for DryingRack.MinPass started");
-            MethodInfo newMinPassInfo = AccessTools.Method(typeof(DryingRackPatches), nameof(NewMinPass));
-
-            //MelonLogger.Msg("Instruction dump:");
-            //foreach (var instruction in instructions)
-            //{
-            //    MelonLogger.Msg($"Opcode: {instruction.opcode}, Operand: {instruction.operand}");
-            //}
-
-            // We want to completely overwrite the target function with our own.
-            CodeMatcher matcher = new(instructions, generator);
-
-            matcher.MatchEndForward(
-                new CodeMatch(OpCodes.Ldarg_0)
-            )
-            .ThrowIfNotMatch($"Could not find entry point for {nameof(MinPassTranspiler)}");
-
-            matcher.InsertAndAdvance(
-                new CodeInstruction(OpCodes.Ldarg_0),       // arg 0 is always this
-                new CodeInstruction(OpCodes.Call, newMinPassInfo),
-                new CodeInstruction(OpCodes.Ret)
-            );
-
-            // Navigate to end of injected method
-            matcher.Start()
-            .MatchEndForward(
-                new CodeMatch(OpCodes.Ret)
-            )
-            .Advance(1);
-
-            // get number of remaining instructions and remove
-            int instructionsToRemove = matcher.InstructionEnumeration().ToList<CodeInstruction>().Count - matcher.Pos;
-            matcher.RemoveInstructions(instructionsToRemove);
-
-            IEnumerable<CodeInstruction> modifiedIL = matcher.InstructionEnumeration();
-
-            //MelonLogger.Msg("\nModified instruction dump:");
-            //foreach (var instruction in modifiedIL)
-            //{
-            //    MelonLogger.Msg($"Opcode: {instruction.opcode}, Operand: {instruction.operand}");
-            //}
-
-            return modifiedIL;
-        }
-        */
     }
 
 
@@ -256,6 +194,7 @@ namespace ProduceMore
             }
         }
 
+        // call to GetCookDuration seems to have been optimized out.
         [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
         [HarmonyPostfix]
         public static void IsReadyPostfix(OvenCookOperation __instance, ref bool __result)
@@ -268,6 +207,7 @@ namespace ProduceMore
         //TODO: patch laboven capacity.
         // or don't. too much effort for too little reward
     }
+
 
     // Patch mixing station capacity and speed
     [HarmonyPatch]
@@ -283,7 +223,6 @@ namespace ProduceMore
             if (__instance.MaxMixQuantity != Mod.settings.GetStationCapacity("MixingStation"))
             {
                 __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
-                MelonLogger.Msg($"Setting mixer capacity from GetMixQuantityPrefix for {__instance.GetHashCode()} from {__instance.MaxMixQuantity} to {Mod.settings.GetStationCapacity("MixingStation")}");
             }
 
             if (__instance.GetProduct() == null || __instance.GetMixer() == null)
@@ -295,7 +234,7 @@ namespace ProduceMore
             return false;
         }
 
-        // maybe unnecessary
+        // actual call to GetMixQuantity seems to have been optimized out.
         [HarmonyPatch(typeof(MixingStation), "CanStartMix")]
         [HarmonyPostfix]
         public static void CanStartMixPostfix(MixingStation __instance, ref bool __result)
@@ -334,91 +273,18 @@ namespace ProduceMore
                 __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
             }
         }
-
-        // probably unnecessary
-        //[HarmonyPatch(typeof(StartMixingStationBehaviour), "CanCookStart")]
-        //[HarmonyPrefix]
-        public static void CanCookStartPrefix(StartMixingStationBehaviour __instance)
-        {
-            if (__instance.targetStation.MaxMixQuantity != Mod.settings.GetStationCapacity("MixingStation"))
-            {
-                __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
-            }
-
-        }
     }
 
 
     // Brick press patches
+    // currently empty
     [HarmonyPatch]
     public static class BrickPressPatches
     {
         public static ProduceMoreMod Mod;
-        // capacity
-        // probably unnecessary
-        //[HarmonyPatch(typeof(BrickPress), "GetMainInputs")]
-        //[HarmonyPrefix]
-        public static bool GetMainInputsPrefix(BrickPress __instance, ref ItemInstance primaryItem, ref int primaryItemQuantity, ref ItemInstance secondaryItem, ref int secondaryItemQuantity)
-        {
-            int stackSize = Mod.settings.GetStationCapacity("BrickPress");
-            List<ItemInstance> list = new List<ItemInstance>();
-            Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
-            int i, k;
-            for (i = 0; i < __instance.InputSlots.Count; i = k + 1)
-            {
-                if (__instance.InputSlots[i].ItemInstance != null)
-                {
-                    ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.InputSlots[i].ItemInstance.ID);
-                    if (itemInstance == null || !itemInstance.CanStackWith(__instance.InputSlots[i].ItemInstance, false))
-                    {
-                        itemInstance = __instance.InputSlots[i].ItemInstance;
-                        list.Add(itemInstance);
-                        if (!itemQuantities.ContainsKey(__instance.InputSlots[i].ItemInstance))
-                        {
-                            itemQuantities.Add(__instance.InputSlots[i].ItemInstance, 0);
-                        }
-                    }
-                    ItemInstance key = itemInstance;
-                    itemQuantities[key] += __instance.InputSlots[i].Quantity;
-                }
-                k = i;
-            }
-            for (int j = 0; j < list.Count; j++)
-            {
-                if (itemQuantities[list[j]] > stackSize)
-                {
-                    int num = itemQuantities[list[j]] - stackSize;
-                    itemQuantities[list[j]] = stackSize;
-                    ItemInstance copy = list[j].GetCopy(num);
-                    list.Add(copy);
-                    itemQuantities.Add(copy, num);
-                }
-            }
-            list = (from x in list
-                    orderby itemQuantities[x] descending
-                    select x).ToList<ItemInstance>();
-            if (list.Count > 0)
-            {
-                primaryItem = list[0];
-                primaryItemQuantity = itemQuantities[list[0]];
-            }
-            else
-            {
-                primaryItem = null;
-                primaryItemQuantity = 0;
-            }
-            if (list.Count > 1)
-            {
-                secondaryItem = list[1];
-                secondaryItemQuantity = itemQuantities[list[1]];
-                return false;
-            }
-            secondaryItem = null;
-            secondaryItemQuantity = 0;
-
-            return false;
-        }
+        // currently empty
     }
+
 
     // cauldron patches
     [HarmonyPatch]
@@ -454,75 +320,6 @@ namespace ProduceMore
             return false;
         }
 
-        // Patch cauldron input stack size
-        // maybe unnecessary        
-        //[HarmonyPatch(typeof(Cauldron), "GetMainInputs")]
-        //[HarmonyPrefix]
-        public static bool GetMainInputsPatch(Cauldron __instance, out ItemInstance primaryItem, out int primaryItemQuantity, out ItemInstance secondaryItem, out int secondaryItemQuantity)
-        {
-            int cauldronCapacity = Mod.settings.GetStationCapacity("Cauldron");
-            int stackSize = -1;
-            List<ItemInstance> list = new List<ItemInstance>();
-            Dictionary<ItemInstance, int> itemQuantities = new Dictionary<ItemInstance, int>();
-            int i, k;
-            for (i = 0; i < __instance.IngredientSlots.Length; i = k + 1)
-            {
-                if (__instance.IngredientSlots[i].ItemInstance != null)
-                {
-                    if (stackSize == -1)
-                    {
-                        stackSize = __instance.IngredientSlots[i].ItemInstance.StackLimit;
-                    }
-                    ItemInstance itemInstance = list.Find((ItemInstance x) => x.ID == __instance.IngredientSlots[i].ItemInstance.ID);
-                    if (itemInstance == null || !itemInstance.CanStackWith(__instance.IngredientSlots[i].ItemInstance, false))
-                    {
-                        itemInstance = __instance.IngredientSlots[i].ItemInstance;
-                        list.Add(itemInstance);
-                        if (!itemQuantities.ContainsKey(__instance.IngredientSlots[i].ItemInstance))
-                        {
-                            itemQuantities.Add(__instance.IngredientSlots[i].ItemInstance, 0);
-                        }
-                    }
-                    itemQuantities[itemInstance] += __instance.IngredientSlots[i].Quantity;
-                }
-                k = i;
-            }
-            for (int j = 0; j < list.Count; j++)
-            {
-                if (itemQuantities[list[j]] > stackSize)
-                {
-                    int num = itemQuantities[list[j]] - stackSize;
-                    itemQuantities[list[j]] = stackSize;
-                    ItemInstance copy = list[j].GetCopy(num);
-                    list.Add(copy);
-                    itemQuantities.Add(copy, num);
-                }
-            }
-            list = (from x in list
-                    orderby itemQuantities[x] descending
-                    select x).ToList<ItemInstance>();
-            if (list.Count > 0)
-            {
-                primaryItem = list[0];
-                primaryItemQuantity = itemQuantities[list[0]];
-            }
-            else
-            {
-                primaryItem = null;
-                primaryItemQuantity = 0;
-            }
-            if (list.Count > 1)
-            {
-                secondaryItem = list[1];
-                secondaryItemQuantity = itemQuantities[list[1]];
-                return false;
-            }
-            secondaryItem = null;
-            secondaryItemQuantity = 0;
-
-            return false;
-        }
-
         // speed
         [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
         [HarmonyPrefix]
@@ -545,6 +342,8 @@ namespace ProduceMore
                 __instance.CookTime = newCookTime;
             }
         }
+
+        // capacity takes care of itself
     }
 
 
@@ -568,6 +367,7 @@ namespace ProduceMore
         // capacity takes care of itself
     }
 
+
     // pot patches
     [HarmonyPatch]
     public static class PotPatches
@@ -583,6 +383,8 @@ namespace ProduceMore
         }
     }
 
+
+    // chemistry station patches
     [HarmonyPatch]
     public static class ChemistryStationPatches
     {
@@ -596,7 +398,6 @@ namespace ProduceMore
             {
                 __instance.Recipe.CookTime_Mins = (int)((float)__instance.Recipe.CookTime_Mins / Mod.settings.GetStationSpeed("ChemistryStation"));
                 Mod.processedRecipes.Add(__instance.Recipe);
-                Mod.LoggerInstance.Msg($"\n\n\nProcessed recipe {__instance.Recipe.GetHashCode()}\n\n\n");
             }
             int hours = __instance.Recipe.CookTime_Mins / 60;
             int minutes = __instance.Recipe.CookTime_Mins % 60;
@@ -607,4 +408,285 @@ namespace ProduceMore
             }
         }
     }
+
+
+    // cash patches
+    // TODO: create transpiler patch for Mono
+    [HarmonyPatch]
+    public static class CashPatches
+    {
+        public static ProduceMoreMod Mod;
+        private static bool IsPlayerCashSlot(ItemSlot slot)
+        {
+            if (PlayerSingleton<PlayerInventory>.Instance.cashSlot.Pointer == slot.Pointer)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private static bool IsPlayerCashSlot(Il2CppSystem.Collections.Generic.List<ItemSlot> slots)
+        {
+            foreach (ItemSlot s in slots)
+            {
+                if (IsPlayerCashSlot(s))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+        // This method has hardcoded constants, so we need to replace it entirely
+        [HarmonyPatch(typeof(ItemUIManager), "UpdateCashDragAmount")]
+        [HarmonyPrefix]
+        public static bool UpdateCashDragAmountPrefix(ItemUIManager __instance, CashInstance instance)
+        {
+            Mod.LoggerInstance.Msg($"In {System.Reflection.MethodBase.GetCurrentMethod().Name}");
+            int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
+
+            float[] array = new float[] { 50f, 10f, 1f };
+            float[] array2 = new float[] { 100f, 10f, 1f };
+            float num = 0f;
+            if (GameInput.MouseScrollDelta > 0f)
+            {
+                for (int i = 0; i < array.Length; i++)
+                {
+                    if (__instance.draggedCashAmount >= array2[i])
+                    {
+                        num = array[i];
+                        break;
+                    }
+                }
+            }
+            else if (GameInput.MouseScrollDelta < 0f)
+            {
+                for (int j = 0; j < array.Length; j++)
+                {
+                    if (__instance.draggedCashAmount > array2[j])
+                    {
+                        num = -array[j];
+                        break;
+                    }
+                }
+            }
+            if (num == 0f)
+            {
+                return false;
+            }
+            __instance.draggedCashAmount = Mathf.Clamp(__instance.draggedCashAmount + num, 1f, Mathf.Min(instance.Balance, stackLimit));
+
+            return false;
+        }
+
+
+        // This method has hardcoded constants, so we need to replace it entirely
+        [HarmonyPatch(typeof(ItemUIManager), "StartDragCash")]
+        [HarmonyPrefix]
+        public static bool StartDragCashPrefix(ItemUIManager __instance)
+        {
+            Mod.LoggerInstance.Msg($"In {System.Reflection.MethodBase.GetCurrentMethod().Name}");
+
+            int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
+
+            CashInstance cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
+
+            __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, stackLimit);
+            __instance.draggedAmount = 1;
+            if (GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick))
+            {
+                __instance.draggedAmount = 1;
+                __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, 100f);
+                __instance.mouseOffset += new Vector2(-10f, -15f);
+                __instance.customDragAmount = true;
+            }
+            if (__instance.draggedCashAmount <= 0f)
+            {
+                __instance.draggedSlot = null;
+                return false;
+            }
+            Mod.LoggerInstance.Msg($"DraggedCashAmount is {__instance.draggedCashAmount}");
+            if (GameInput.GetButton(GameInput.ButtonCode.QuickMove) && __instance.QuickMoveEnabled)
+            {
+                Il2CppSystem.Collections.Generic.List<ItemSlot> quickMoveSlots = __instance.GetQuickMoveSlots(__instance.draggedSlot.assignedSlot);
+                if (quickMoveSlots.Count > 0)
+                {
+                    Mod.LoggerInstance.Msg($"Quick-moving {__instance.draggedAmount} items ({__instance.draggedCashAmount})");
+                    Debug.Log("Quick-moving " + __instance.draggedAmount.ToString() + " items...");
+                    float a = __instance.draggedCashAmount;
+                    float num = 0f;
+                    int i = 0;
+                    Mod.LoggerInstance.Msg($"starting loop. num = {num}; i = {i}");
+                    while (i < quickMoveSlots.Count && num < (float)__instance.draggedAmount)
+                    {
+                        Mod.LoggerInstance.Msg($"in loop {i}, num = {num}");
+                        ItemSlot itemSlot = quickMoveSlots[i];
+                        if (itemSlot.ItemInstance != null)
+                        {
+                            Mod.LoggerInstance.Msg($"itemSlot is {itemSlot.Pointer}");
+                            CashInstance cashInstance2 = itemSlot.ItemInstance.Cast<CashInstance>();
+                            if (cashInstance2 != null)
+                            {
+                                float num3;
+                                // it's probably this conditional that's failing.
+                                // how to safely tell if this condition is true?
+                                if (itemSlot is CashSlot)
+                                {
+                                    Mod.LoggerInstance.Msg($"itemSlot {itemSlot.Pointer} is CashSlot.");
+                                    if (IsPlayerCashSlot(itemSlot))
+                                    {
+                                        Mod.LoggerInstance.Msg($"itemSlot is player cashslot.");
+                                        Mod.LoggerInstance.Msg($"itemSlot: {itemSlot.Pointer}; itemSlot.ItemInstance: {itemSlot.ItemInstance.Pointer}");
+                                    }
+                                    num3 = Mathf.Min(a, float.MaxValue - cashInstance2.Balance);
+                                    Mod.LoggerInstance.Msg($"num3 ({num3}) = Mathf.Min(a ({a}), float.MaxValue ({float.MaxValue}) - cashInstance2.Balance ({cashInstance2.Balance} = {float.MaxValue - cashInstance2.Balance})");
+                                }
+                                else
+                                {
+                                    Mod.LoggerInstance.Msg($"itemSlot is not player cashslot.");
+                                    Mod.LoggerInstance.Msg($"itemSlot: {itemSlot.Pointer}; itemSlot.ItemInstance: {itemSlot.ItemInstance.Pointer}");
+                                    num3 = Mathf.Min(a, stackLimit - cashInstance2.Balance);
+                                    Mod.LoggerInstance.Msg($"num3 ({num3}) = Mathf.Min(a ({a}), stackLimit ({stackLimit}) - cashInstance2.Balance ({cashInstance2.Balance} = {stackLimit - cashInstance2.Balance})");
+                                }
+                                Mod.LoggerInstance.Msg($"Changing balance of cashInstance2 {cashInstance2.Pointer} to {num3}");
+                                cashInstance2.ChangeBalance(num3);
+                                itemSlot.ReplicateStoredInstance();
+                                Mod.LoggerInstance.Msg($"num = num ({num}) + num3 ({num3}) = {num + num3}");
+                                num += num3;
+                            }
+                        }
+                        else
+                        {
+                            CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
+                            Mod.LoggerInstance.Msg($"Changing balance of cashInstance3 {cashInstance3.Pointer} from {cashInstance3.Balance} to {__instance.draggedCashAmount}");
+                            cashInstance3.SetBalance(__instance.draggedCashAmount, false);
+                            itemSlot.SetStoredItem(cashInstance3, false);
+                            Mod.LoggerInstance.Msg($"Num = {num} + {__instance.draggedCashAmount}");
+                            num += __instance.draggedCashAmount;
+                        }
+                        i++;
+                    }
+                    if (num >= cashInstance.Balance)
+                    {
+                        Mod.LoggerInstance.Msg($"num ({num}) >= cashInstance.Balance ({cashInstance.Balance}");
+                        Mod.LoggerInstance.Msg($"Clearing stored instance for __instance.draggedSlot.assignedSlot ({__instance.draggedSlot.assignedSlot.Pointer})");
+                        __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
+                    }
+                    else
+                    {
+                        if (num < 0)
+                        {
+                            Mod.LoggerInstance.Msg($"Did stacks just break?");
+                        }
+                        Mod.LoggerInstance.Msg($"Changing balance of cashInstance {cashInstance.Pointer} to {cashInstance.Balance - num} (num is {num})");
+                        cashInstance.ChangeBalance(-num);
+                        __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
+                    }
+                }
+                if (__instance.onItemMoved != null)
+                {
+                    __instance.onItemMoved.Invoke();
+                }
+                __instance.draggedSlot = null;
+                return false;
+            }
+            if (__instance.onDragStart != null)
+            {
+                __instance.onDragStart.Invoke();
+            }
+            if (__instance.draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
+            {
+                __instance.CashSlotHintAnim.Play();
+            }
+            __instance.tempIcon = __instance.draggedSlot.DuplicateIcon(Singleton<HUD>.Instance.transform, __instance.draggedAmount);
+            __instance.tempIcon.Find("Balance").GetComponent<TextMeshProUGUI>().text = MoneyManager.FormatAmount(__instance.draggedCashAmount, false, false);
+            __instance.draggedSlot.IsBeingDragged = true;
+            if (__instance.draggedCashAmount >= cashInstance.Balance)
+            {
+                __instance.draggedSlot.SetVisible(false);
+                return false;
+            }
+            (__instance.draggedSlot.ItemUI as ItemUI_Cash).SetDisplayedBalance(cashInstance.Balance - __instance.draggedCashAmount);
+            return false;
+        }
+
+        // This method has hardcoded constants, so we need to replace it completely
+        [HarmonyPatch(typeof(ItemUIManager), "EndCashDrag")]
+        [HarmonyPrefix]
+        public unsafe static bool EndCashDragPrefix(ItemUIManager __instance)
+        {
+            int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
+            CashInstance cashInstance = null;
+            if (__instance.draggedSlot != null && __instance.draggedSlot.assignedSlot != null)
+            {
+                cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
+            }
+
+            __instance.CashSlotHintAnim.Stop();
+            __instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
+            if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
+            {
+                if (__instance.HoveredSlot.assignedSlot is HotbarSlot && !(__instance.HoveredSlot.assignedSlot is CashSlot))
+                {
+                    __instance.HoveredSlot = Singleton<HUD>.Instance.cashSlotUI.GetComponent<CashSlotUI>();
+                }
+                float num = Mathf.Min(__instance.draggedCashAmount, cashInstance.Balance);
+                if (num > 0f)
+                {
+                    float num2 = num;
+                    Mod.LoggerInstance.Msg($"num is {num}; num2 is {num2}");
+                    if (__instance.HoveredSlot.assignedSlot.ItemInstance != null)
+                    {
+                        CashInstance cashInstance2 = __instance.HoveredSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
+                        Mod.LoggerInstance.Msg($"cashInstance2 is {cashInstance2.Pointer}, balance is {cashInstance2.Balance}");
+                        if (__instance.HoveredSlot.assignedSlot is CashSlot)
+                        {
+                            Mod.LoggerInstance.Msg($"__instance.HoveredSlot.assignedSlot {__instance.HoveredSlot.assignedSlot.Pointer} is CashSlot.");
+                            if (IsPlayerCashSlot(__instance.HoveredSlot.assignedSlot))
+                            {
+                                Mod.LoggerInstance.Msg($"itemSlot is player cashslot.");
+                                Mod.LoggerInstance.Msg($"itemSlot: {__instance.HoveredSlot.assignedSlot.Pointer}; itemSlot.ItemInstance: {__instance.HoveredSlot.assignedSlot.ItemInstance.Pointer}");
+                            }
+                            
+                            num2 = Mathf.Min(num, float.MaxValue - cashInstance2.Balance);
+                        }
+                        else
+                        {
+                            num2 = Mathf.Min(num, stackLimit - cashInstance2.Balance);
+                        }
+                        Mod.LoggerInstance.Msg($"Change balance of cashInstance2 ({cashInstance2.Pointer}) to num2 ({num2})");
+                        cashInstance2.ChangeBalance(num2);
+                        __instance.HoveredSlot.assignedSlot.ReplicateStoredInstance();
+                    }
+                    else
+                    {
+                        CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
+                        cashInstance3.SetBalance(num2, false);
+                        __instance.HoveredSlot.assignedSlot.SetStoredItem(cashInstance3, false);
+                        Mod.LoggerInstance.Msg($"Create cashInstance3 ({cashInstance3.Pointer}; set balance to num2 ({num2}); set stored item of slot ({__instance.HoveredSlot.assignedSlot.Pointer}) to cashInstance3");
+                    }
+                    if (num2 >= cashInstance.Balance)
+                    {
+                        Mod.LoggerInstance.Msg($"num2 ({num2} >= cashInstance.Balance ({cashInstance.Balance}); clearing stored instance for itemslot {__instance.draggedSlot.assignedSlot.Pointer}");
+                        __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
+                    }
+                    else
+                    {
+                        Mod.LoggerInstance.Msg($"changing cashInstance.Balance from {cashInstance.Balance} to {-num2}");
+                        cashInstance.ChangeBalance(-num2);
+                        __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
+                    }
+                }
+            }
+            __instance.draggedSlot.SetVisible(true);
+            __instance.draggedSlot.UpdateUI();
+            __instance.draggedSlot.IsBeingDragged = false;
+            __instance.draggedSlot = null;
+            UnityEngine.Object.Destroy(__instance.tempIcon.gameObject);
+            Singleton<CursorManager>.Instance.SetCursorAppearance(CursorManager.ECursorType.Default);
+            return false;
+        }
+    }
+
 }

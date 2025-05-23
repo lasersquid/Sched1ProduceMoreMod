@@ -18,7 +18,7 @@
 	<!-- Conditionally set some properties depending on GameVer. -->
 	<PropertyGroup Condition="'$(GameVer)'=='il2cpp'">
 		<TargetFramework>net6</TargetFramework>
-		<AssemblyName>$(ProjName)</AssemblyName>
+		<AssemblyName>$(ProjName)IL2CPP</AssemblyName>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(GameVer)'=='mono'">
@@ -80,8 +80,14 @@
 		<Reference Include="UnityEngine">
 			<HintPath>il2cpp_libs\UnityEngine.dll</HintPath>
 		</Reference>
+		<Reference Include="UnityEngine.AnimationModule">
+		  <HintPath>il2cpp_libs\UnityEngine.AnimationModule.dll</HintPath>
+		</Reference>
 		<Reference Include="UnityEngine.CoreModule">
 			<HintPath>il2cpp_libs\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.UIModule">
+		  <HintPath>il2cpp_libs\UnityEngine.UIModule.dll</HintPath>
 		</Reference>
 
 	</ItemGroup>
@@ -94,8 +100,6 @@
 	<ItemGroup>
 		<Compile Include="Mod.cs" />
 		<Compile Include="ProduceMore.cs" />
-		<Compile Include="MethodBaseHelper.cs" />
-		<Compile Include="Program.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -111,7 +115,7 @@
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;copy bin\Debug\net6\ProduceMore.dll &quot;C:\Program Files (x86)\Steam\steamapps\common\Schedule I\mods\&quot;" />
+		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;copy &quot;bin\Debug\$(TargetFramework)\$(AssemblyName).dll&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\Schedule I\mods\&quot;" />
 	</Target>
 
 	<!-- This import is required here if we use a Project tag with no properties -->
