@@ -355,11 +355,7 @@ namespace ProduceMore
 //		PotPatches - working
 //		CashPatches - working
 
-// IL2CPP build after Mono modifications:
-//		CauldronPatches - needs testing
-//		CashPatches - needs testing
-
 
 // Bugs:
-// - can't enter quantity in shops -- not my bug
-// - if you shift-click a stack of cash, your inventory cash sometimes deposits itself into the slot -- FIXED
+//	none yet :)
+
