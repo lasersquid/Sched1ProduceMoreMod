@@ -1,6 +1,8 @@
 ﻿using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using Il2CppInterop.Runtime.InteropTypes;
+
 
 
 #if MONO_BUILD
@@ -191,21 +193,19 @@ namespace ProduceMore
         public static void GetCookDurationPostfix(ref int __result)
         {
             __result = (int)((float)__result / Mod.settings.GetStationSpeed("LabOven"));
+            Mod.LoggerInstance.Msg($"Returning {__result} from GetCookOperationPostfix");
         }
 
 #if MONO_BUILD
 
         // might need to patch IsReadyForHarvest
-        /*
-        [HarmonyPatch(typeof(OvenCookOperation), "IsReadyForHarvest")]
-        [HarmonyPostfix]
+        //[HarmonyPatch(typeof(OvenCookOperation), "IsReadyForHarvest")]
+        //[HarmonyPostfix]
         public static void IsReadyForHarvestPostfix(OvenCookOperation __instance)
         {
 
         }
-        */
 #else
-
 
         // call to GetCookDuration seems to have been optimized out.
         [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
@@ -214,6 +214,7 @@ namespace ProduceMore
         {
             // Re-insert original method body.
             __result = __instance.CookProgress >= __instance.GetCookDuration();
+            Mod.LoggerInstance.Msg($"Returning {__result} from IsReadyPostfix");
         }
 
 
@@ -336,12 +337,12 @@ namespace ProduceMore
             return false;
         }
 
+#if MONO_BUILD
         // speed
         [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
         [HarmonyPostfix]
         public static void BeginCauldronPostfix(StartCauldronBehaviour __instance)
         {
-            Mod.LoggerInstance.Msg("In BeginCauldronPostfix.");
             int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
             if (__instance.Station.RemainingCookTime > newCookTime)
             {
@@ -355,7 +356,6 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void StartCookOperationPostfix(Cauldron __instance)
         {
-            Mod.LoggerInstance.Msg("In StartCookOperationPostfix.");
             int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
             if (__instance.RemainingCookTime > newCookTime)
             {
@@ -364,8 +364,32 @@ namespace ProduceMore
             }
         }
 
+#else
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
+        [HarmonyPrefix]
+        public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
+        {
+            int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
+            if (__instance.Station.CookTime != newCookTime)
+            {
+                __instance.Station.CookTime = newCookTime;
+            }
+        }
 
-        
+        [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
+        [HarmonyPrefix]
+        public static void StartCookOperationPrefix(Cauldron __instance)
+        {
+            int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
+            if (__instance.CookTime != newCookTime)
+            {
+                __instance.CookTime = newCookTime;
+            }
+        }
+
+#endif
+
+
 
 
         // capacity takes care of itself
@@ -436,32 +460,32 @@ namespace ProduceMore
 
 
     // cash patches
-    [HarmonyPatch]
+    //[HarmonyPatch]
     public static class CashPatches
     {
         public static ProduceMoreMod Mod;
 
 
         // Helper functions to make patches cross-platform
-        private static T CastTo<T>(object o)
+        private static T CastTo<T>(object o) 
         {
-#if MONO_BUILD
             return (T)o;
-#else
-            return o.Cast<T>();
-#endif
         }
 
+        private static T CastTo<T>(Il2CppSystem.Object o) where T : Il2CppObjectBase
+        {
+            return o.Cast<T>();
+        }
 
         private static bool Is<T>(object o)
         {
-#if MONO_BUILD
             return o is T;
-#else
-            return (o as Il2CppObject).TryCast<T>() != null;
-#endif
         }
 
+        private static bool Is<T>(Il2CppSystem.Object o) where T:Il2CppObjectBase
+        {
+                return (o.TryCast<T>() != null);
+        }
 
         private static List<ItemSlot> GetQuickMoveSlots(ItemUIManager itemUIManager, ItemSlot itemSlot)
         {
@@ -469,19 +493,18 @@ namespace ProduceMore
             MethodInfo GetQuickMoveSlotsInfo = AccessTools.DeclaredMethod(typeof(ItemUIManager), "GetQuickMoveSlots");
             return (List<ItemSlot>)GetQuickMoveSlotsInfo.Invoke(itemUIManager, [itemSlot]);
 #else
-            return itemUIManager.GetQuickMoveSlots().ToList();
-            //Il2CppSystem.Collections.Generic.List<ItemSlot> il2CppList = itemUIManager.GetQuickMoveSlots().ToList();
-            //List<ItemSlot> list = new List<ItemSlot>;
-            //foreach (ItemSlot slot in il2CppList)
-            //{
-            //    list.Add(slot);
-            //}
-            //return list;
+            List<ItemSlot> list = new List<ItemSlot>();
+            foreach (ItemSlot slot in itemUIManager.GetQuickMoveSlots(itemSlot))
+            {
+                list.Add(slot);
+            }
+            return list;
 #endif
         }
 
 
         // This method has hardcoded constants, so we need to replace it entirely
+        // (or use a transpiler patch but that's not cross-platform friendly)
         [HarmonyPatch(typeof(ItemUIManager), "UpdateCashDragAmount")]
         [HarmonyPrefix]
         public static bool UpdateCashDragAmountPrefix(ItemUIManager __instance, CashInstance instance, ref float ___draggedCashAmount)
@@ -525,7 +548,6 @@ namespace ProduceMore
 
 
         // This method has hardcoded constants, so we need to replace it entirely
-        // (or use a transpiler patch but that's not cross-platform friendly)
         [HarmonyPatch(typeof(ItemUIManager), "StartDragCash")]
         [HarmonyPrefix]
         public static bool StartDragCashPrefix(
@@ -556,8 +578,8 @@ namespace ProduceMore
             }
             if (GameInput.GetButton(GameInput.ButtonCode.QuickMove) && __instance.QuickMoveEnabled)
             {
-                List<ItemSlot> quickMoveSlots = GetQuickMoveSlots(__instance, ___draggedSlot.assignedSlot);
                 //List<ItemSlot> quickMoveSlots = __instance.GetQuickMoveSlots(___draggedSlot.assignedSlot);
+                List<ItemSlot> quickMoveSlots = GetQuickMoveSlots(__instance, ___draggedSlot.assignedSlot);
                 if (quickMoveSlots.Count > 0)
                 {
                     Debug.Log("Quick-moving " + ___draggedAmount.ToString() + " items...");

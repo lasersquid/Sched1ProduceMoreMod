@@ -1,6 +1,8 @@
 ﻿using MelonLoader;
 using MelonLoader.Utils;
 using Newtonsoft.Json;
+using HarmonyLib;
+
 
 #if MONO_BUILD
 using ScheduleOne.EntityFramework;
@@ -56,9 +58,9 @@ namespace ProduceMore
 			processedRecipes = new HashSet<StationRecipe>();
 		}
 
-        private void LoadSettings()
+		private void LoadSettings()
 		{
-			MelonLogger.Msg($"Loading settings from {settingsFilePath}");
+			LoggerInstance.Msg($"Loading settings from {settingsFilePath}");
 			settings = ModSettings.LoadSettings(settingsFilePath);
 			if (!File.Exists(settingsFilePath))
 			{
@@ -76,16 +78,32 @@ namespace ProduceMore
 		
 		private void SetMod()
 		{
+			// this was so elegant. alas, AccessToolsExtensions is not available in HarmonyX
+			// (and I don't know how to select harmonylib 2.3.6 over harmonyx 2.10.12 at runtime in a class library)
+			/*
+			Type[] types =
+                (Type[])System.Reflection.Assembly.GetExecutingAssembly()
+				.GetTypes()
+				.Where(t => t.Namespace.StartsWith("ProduceMore") && t.Name.EndsWith("Patches"));
+
+            foreach (var t in types)
+            {
+				LoggerInstance.Msg($"Setting Mod for {t.Name}");
+				t.StaticFieldRefAccess<ProduceMoreMod>("Mod") = this;
+            }
+			*/
+
 			ItemCapacityPatches.Mod = this;
 			DryingRackPatches.Mod = this;
 			LabOvenPatches.Mod = this;
-            MixingStationPatches.Mod = this;
-            BrickPressPatches.Mod = this;
+			MixingStationPatches.Mod = this;
+			BrickPressPatches.Mod = this;
 			CauldronPatches.Mod = this;
 			PackagingStationPatches.Mod = this;
 			PotPatches.Mod = this;
 			ChemistryStationPatches.Mod = this;
 			CashPatches.Mod = this;
+			
         }
 	}
 
