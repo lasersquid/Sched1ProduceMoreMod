@@ -1,31 +1,25 @@
-﻿using System.Reflection.Emit;
-using System.Reflection;
+﻿using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
-using ScheduleOne.UI;
-using ScheduleOne;
-using ScheduleOne.Money;
-using ScheduleOne.DevUtilities;
-using ScheduleOne.PlayerScripts;
-using TMPro;
-
-
-
-
-
 
 
 #if MONO_BUILD
 using FishNet;
+using ScheduleOne.DevUtilities;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Money;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
+using ScheduleOne.PlayerScripts;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Phone.Delivery;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
+using ScheduleOne.UI;
+using ScheduleOne;
+using TMPro;
 #else
 using Il2CppFishNet;
 using Il2CppScheduleOne.DevUtilities;
@@ -196,11 +190,22 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void GetCookDurationPostfix(ref int __result)
         {
-            if (Mod.settings.GetStationSpeed("LabOven") > 0)
-            {
-                __result = (int)((float)__result / Mod.settings.GetStationSpeed("LabOven"));
-            }
+            __result = (int)((float)__result / Mod.settings.GetStationSpeed("LabOven"));
         }
+
+#if MONO_BUILD
+
+        // might need to patch IsReadyForHarvest
+        /*
+        [HarmonyPatch(typeof(OvenCookOperation), "IsReadyForHarvest")]
+        [HarmonyPostfix]
+        public static void IsReadyForHarvestPostfix(OvenCookOperation __instance)
+        {
+
+        }
+        */
+#else
+
 
         // call to GetCookDuration seems to have been optimized out.
         [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
@@ -210,6 +215,9 @@ namespace ProduceMore
             // Re-insert original method body.
             __result = __instance.CookProgress >= __instance.GetCookDuration();
         }
+
+
+#endif
 
 
         //TODO: patch laboven capacity.
@@ -330,26 +338,35 @@ namespace ProduceMore
 
         // speed
         [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
-        [HarmonyPrefix]
-        public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
+        [HarmonyPostfix]
+        public static void BeginCauldronPostfix(StartCauldronBehaviour __instance)
         {
+            Mod.LoggerInstance.Msg("In BeginCauldronPostfix.");
             int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
-            if (__instance.Station.CookTime != newCookTime)
+            if (__instance.Station.RemainingCookTime > newCookTime)
             {
-                __instance.Station.CookTime = newCookTime;
+                __instance.Station.RemainingCookTime = newCookTime;
+                Mod.LoggerInstance.Msg($"Set remainingcooktime to {newCookTime}");
             }
         }
 
+
         [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
-        [HarmonyPrefix]
-        public static void StartCookOperationPrefix(Cauldron __instance)
+        [HarmonyPostfix]
+        public static void StartCookOperationPostfix(Cauldron __instance)
         {
+            Mod.LoggerInstance.Msg("In StartCookOperationPostfix.");
             int newCookTime = (int)(360f / Mod.settings.GetStationSpeed("Cauldron"));
-            if (__instance.CookTime != newCookTime)
+            if (__instance.RemainingCookTime > newCookTime)
             {
-                __instance.CookTime = newCookTime;
+                __instance.RemainingCookTime = newCookTime;
+                Mod.LoggerInstance.Msg($"Set remainingcooktime to {newCookTime}");
             }
         }
+
+
+        
+
 
         // capacity takes care of itself
     }
@@ -424,6 +441,46 @@ namespace ProduceMore
     {
         public static ProduceMoreMod Mod;
 
+
+        // Helper functions to make patches cross-platform
+        private static T CastTo<T>(object o)
+        {
+#if MONO_BUILD
+            return (T)o;
+#else
+            return o.Cast<T>();
+#endif
+        }
+
+
+        private static bool Is<T>(object o)
+        {
+#if MONO_BUILD
+            return o is T;
+#else
+            return (o as Il2CppObject).TryCast<T>() != null;
+#endif
+        }
+
+
+        private static List<ItemSlot> GetQuickMoveSlots(ItemUIManager itemUIManager, ItemSlot itemSlot)
+        {
+#if MONO_BUILD
+            MethodInfo GetQuickMoveSlotsInfo = AccessTools.DeclaredMethod(typeof(ItemUIManager), "GetQuickMoveSlots");
+            return (List<ItemSlot>)GetQuickMoveSlotsInfo.Invoke(itemUIManager, [itemSlot]);
+#else
+            return itemUIManager.GetQuickMoveSlots().ToList();
+            //Il2CppSystem.Collections.Generic.List<ItemSlot> il2CppList = itemUIManager.GetQuickMoveSlots().ToList();
+            //List<ItemSlot> list = new List<ItemSlot>;
+            //foreach (ItemSlot slot in il2CppList)
+            //{
+            //    list.Add(slot);
+            //}
+            //return list;
+#endif
+        }
+
+
         // This method has hardcoded constants, so we need to replace it entirely
         [HarmonyPatch(typeof(ItemUIManager), "UpdateCashDragAmount")]
         [HarmonyPrefix]
@@ -466,44 +523,13 @@ namespace ProduceMore
             return false;
         }
 
-        private static T CastTo<T>(object o)
-        {
-#if MONO_BUILD
-            return (T)o;
-#else
-            return o.Cast<T>();
-#endif
-        }
-
-        private static bool Is<T>(object o)
-        {
-#if MONO_BUILD
-            return o is T;
-#else
-            return (o as Il2CppObject).TryCast<T>() != null;
-#endif
-        }
-
-        private static List<ItemSlot> GetQuickMoveSlots(ItemUIManager itemUIManager, ItemSlot itemSlot)
-        {
-#if MONO_BUILD
-            MethodInfo GetQuickMoveSlotsInfo = AccessTools.DeclaredMethod(typeof(ItemUIManager), "GetQuickMoveSlots");
-            return (List<ItemSlot>)GetQuickMoveSlotsInfo.Invoke(itemUIManager, [itemSlot]);
-#else
-            Il2CppSystem.Collections.Generic.List<ItemSlot> il2CppList = itemUIManager.GetQuickMoveSlots();
-            List<ItemSlot> list = new List<ItemSlot>;
-            foreach (ItemSlot slot in il2CppList)
-            {
-                list.Add(slot);
-            }
-            return list;
-#endif
-        }
 
         // This method has hardcoded constants, so we need to replace it entirely
+        // (or use a transpiler patch but that's not cross-platform friendly)
         [HarmonyPatch(typeof(ItemUIManager), "StartDragCash")]
         [HarmonyPrefix]
-        public static bool StartDragCashPrefix(ItemUIManager __instance, 
+        public static bool StartDragCashPrefix(
+            ItemUIManager __instance, 
             ref float ___draggedCashAmount, 
             ref int ___draggedAmount, 
             ref ItemSlotUI ___draggedSlot, 
@@ -606,10 +632,12 @@ namespace ProduceMore
             return false;
         }
 
+
         // This method has hardcoded constants, so we need to replace it completely
         [HarmonyPatch(typeof(ItemUIManager), "EndCashDrag")]
         [HarmonyPrefix]
-        public unsafe static bool EndCashDragPrefix(ItemUIManager __instance,
+        public unsafe static bool EndCashDragPrefix(
+            ItemUIManager __instance,
             ref float ___draggedCashAmount,
             ref int ___draggedAmount,
             ref ItemSlotUI ___draggedSlot,
@@ -630,7 +658,6 @@ namespace ProduceMore
             {
                 if (Is<HotbarSlot>(__instance.HoveredSlot.assignedSlot) && !Is<CashSlot>(__instance.HoveredSlot.assignedSlot))
                 {
-                    // how to retrieve a private setter?
                     MethodInfo HoveredSlotSetterInfo = AccessTools.DeclaredPropertySetter(typeof(ItemUIManager), "HoveredSlot");
                     HoveredSlotSetterInfo.Invoke(__instance, [Singleton<HUD>.Instance.cashSlotUI.GetComponent<CashSlotUI>()]);
                 }

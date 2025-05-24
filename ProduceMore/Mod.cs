@@ -36,7 +36,6 @@ namespace ProduceMore
 		{
 			LoadSettings();
 			SetMod();
-			harmony.PatchAll();
 			LoggerInstance.Msg("Initialized.");
 		}
 
@@ -315,16 +314,33 @@ namespace ProduceMore
 
 
 // Testing:
-// ItemInstancePatches - working
-// ChemistryStationPatches - working
-// DryingRackPatches - working
-// LabOvenPatches - working
-// MixingStationPatches - working
-// BrickPressPatches - working
-// CauldronPatches - working
-// PackagingStationPatches - working
-// PotPatches - working
-// CashPatches - working
+// IL2CPP:
+//		ItemInstancePatches - working
+//		ChemistryStationPatches - working
+//		DryingRackPatches - working
+//		LabOvenPatches - working
+//		MixingStationPatches - working
+//		BrickPressPatches - empty
+//		CauldronPatches - working
+//		PackagingStationPatches - working
+//		PotPatches - working
+//		CashPatches - working
+// Mono:
+//		ItemInstancePatches - working
+//		ChemistryStationPatches - working
+//		DryingRackPatches - working
+//		LabOvenPatches - working
+//		MixingStationPatches - working
+//		BrickPressPatches - empty
+//		CauldronPatches - working
+//		PackagingStationPatches - working
+//		PotPatches - working
+//		CashPatches - working
+
+// IL2CPP build after Mono modifications:
+//		CauldronPatches - needs testing
+//		CashPatches - needs testing
+
 
 // Bugs:
 // - can't enter quantity in shops -- not my bug
