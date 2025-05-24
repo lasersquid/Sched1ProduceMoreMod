@@ -4,6 +4,8 @@
 		<ProjName>ProduceMore</ProjName>
 		<GameVer>mono</GameVer>
 		<Version>1.0.0</Version>
+		<GameDir>C:\Program Files (x86)\Steam\steamapps\common\Schedule I</GameDir>
+		<GamePath>$(GameDir)\Schedule I.exe</GamePath>
 
 		<BaseOutputPath>$(MSBuildProjectDirectory)\bin</BaseOutputPath>
 		<BaseIntermediateOutputPath>$(MSBuildProjectDirectory)\obj\$(GameVer)</BaseIntermediateOutputPath>
@@ -74,6 +76,7 @@
 	<ItemGroup>
 		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.0" />
 		<PackageReference Include="Lib.Harmony" Version="2.3.6" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -83,11 +86,20 @@
 	  <Reference Include="FishNet.Runtime">
 	    <HintPath>mono_libs\FishNet.Runtime.dll</HintPath>
 	  </Reference>
+	  <Reference Include="Unity.TextMeshPro">
+	    <HintPath>mono_libs\Unity.TextMeshPro.dll</HintPath>
+	  </Reference>
 	  <Reference Include="UnityEngine">
 	    <HintPath>mono_libs\UnityEngine.dll</HintPath>
 	  </Reference>
+	  <Reference Include="UnityEngine.AnimationModule">
+	    <HintPath>mono_libs\UnityEngine.AnimationModule.dll</HintPath>
+	  </Reference>
 	  <Reference Include="UnityEngine.CoreModule">
 	    <HintPath>mono_libs\UnityEngine.CoreModule.dll</HintPath>
+	  </Reference>
+	  <Reference Include="UnityEngine.UIModule">
+	    <HintPath>mono_libs\UnityEngine.UIModule.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 	
@@ -96,7 +108,7 @@
 	</PropertyGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)" />
+		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;copy &quot;bin\Debug\$(TargetFramework)\$(AssemblyName).dll&quot; &quot;$(GameDir)\mods\&quot;" />
 	</Target>
 
 	<!-- This import is required here if we use a Project tag with no properties -->

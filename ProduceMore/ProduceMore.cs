@@ -1,23 +1,31 @@
-﻿using HarmonyLib;
+﻿using System.Reflection.Emit;
+using System.Reflection;
+using HarmonyLib;
 using UnityEngine;
+using ScheduleOne.UI;
+using ScheduleOne;
+using ScheduleOne.Money;
+using ScheduleOne.DevUtilities;
+using ScheduleOne.PlayerScripts;
+using TMPro;
+
+
+
+
+
+
 
 #if MONO_BUILD
 using FishNet;
-using ScheduleOne.DevUtilities;
 using ScheduleOne.ItemFramework;
-using ScheduleOne.Money;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
-using ScheduleOne.PlayerScripts;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Phone.Delivery;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
-using ScheduleOne.UI;
-using ScheduleOne;
-using TMPro;
 #else
 using Il2CppFishNet;
 using Il2CppScheduleOne.DevUtilities;
@@ -60,7 +68,7 @@ namespace ProduceMore
             }
         }
 
-        // For shops
+        // For phone delivery app
         [HarmonyPatch(typeof(ListingEntry), "Initialize")]
         [HarmonyPrefix]
         public static void InitializePrefix(ShopListing match)
@@ -411,37 +419,15 @@ namespace ProduceMore
 
 
     // cash patches
-    // TODO: create transpiler patch for Mono
     [HarmonyPatch]
     public static class CashPatches
     {
         public static ProduceMoreMod Mod;
-        private static bool IsPlayerCashSlot(ItemSlot slot)
-        {
-            if (PlayerSingleton<PlayerInventory>.Instance.cashSlot.Pointer == slot.Pointer)
-            {
-                return true;
-            }
-            return false;
-        }
-
-        private static bool IsPlayerCashSlot(Il2CppSystem.Collections.Generic.List<ItemSlot> slots)
-        {
-            foreach (ItemSlot s in slots)
-            {
-                if (IsPlayerCashSlot(s))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
 
         // This method has hardcoded constants, so we need to replace it entirely
         [HarmonyPatch(typeof(ItemUIManager), "UpdateCashDragAmount")]
         [HarmonyPrefix]
-        public static bool UpdateCashDragAmountPrefix(ItemUIManager __instance, CashInstance instance)
+        public static bool UpdateCashDragAmountPrefix(ItemUIManager __instance, CashInstance instance, ref float ___draggedCashAmount)
         {
             Mod.LoggerInstance.Msg($"In {System.Reflection.MethodBase.GetCurrentMethod().Name}");
             int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
@@ -453,7 +439,7 @@ namespace ProduceMore
             {
                 for (int i = 0; i < array.Length; i++)
                 {
-                    if (__instance.draggedCashAmount >= array2[i])
+                    if (___draggedCashAmount >= array2[i])
                     {
                         num = array[i];
                         break;
@@ -464,7 +450,7 @@ namespace ProduceMore
             {
                 for (int j = 0; j < array.Length; j++)
                 {
-                    if (__instance.draggedCashAmount > array2[j])
+                    if (___draggedCashAmount > array2[j])
                     {
                         num = -array[j];
                         break;
@@ -475,55 +461,93 @@ namespace ProduceMore
             {
                 return false;
             }
-            __instance.draggedCashAmount = Mathf.Clamp(__instance.draggedCashAmount + num, 1f, Mathf.Min(instance.Balance, stackLimit));
+            ___draggedCashAmount = Mathf.Clamp(___draggedCashAmount + num, 1f, Mathf.Min(instance.Balance, stackLimit));
 
             return false;
         }
 
+        private static T CastTo<T>(object o)
+        {
+#if MONO_BUILD
+            return (T)o;
+#else
+            return o.Cast<T>();
+#endif
+        }
+
+        private static bool Is<T>(object o)
+        {
+#if MONO_BUILD
+            return o is T;
+#else
+            return (o as Il2CppObject).TryCast<T>() != null;
+#endif
+        }
+
+        private static List<ItemSlot> GetQuickMoveSlots(ItemUIManager itemUIManager, ItemSlot itemSlot)
+        {
+#if MONO_BUILD
+            MethodInfo GetQuickMoveSlotsInfo = AccessTools.DeclaredMethod(typeof(ItemUIManager), "GetQuickMoveSlots");
+            return (List<ItemSlot>)GetQuickMoveSlotsInfo.Invoke(itemUIManager, [itemSlot]);
+#else
+            Il2CppSystem.Collections.Generic.List<ItemSlot> il2CppList = itemUIManager.GetQuickMoveSlots();
+            List<ItemSlot> list = new List<ItemSlot>;
+            foreach (ItemSlot slot in il2CppList)
+            {
+                list.Add(slot);
+            }
+            return list;
+#endif
+        }
 
         // This method has hardcoded constants, so we need to replace it entirely
         [HarmonyPatch(typeof(ItemUIManager), "StartDragCash")]
         [HarmonyPrefix]
-        public static bool StartDragCashPrefix(ItemUIManager __instance)
+        public static bool StartDragCashPrefix(ItemUIManager __instance, 
+            ref float ___draggedCashAmount, 
+            ref int ___draggedAmount, 
+            ref ItemSlotUI ___draggedSlot, 
+            ref Vector2 ___mouseOffset, 
+            ref bool ___customDragAmount,
+            ref RectTransform ___tempIcon)
         {
             int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
 
-            CashInstance cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
-            __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, stackLimit);
-            __instance.draggedAmount = 1;
+            CashInstance cashInstance = CastTo<CashInstance>(___draggedSlot.assignedSlot.ItemInstance);
+            ___draggedCashAmount = Mathf.Min(cashInstance.Balance, stackLimit);
+            ___draggedAmount = 1;
             if (GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick))
             {
-                __instance.draggedAmount = 1;
-                __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, 100f);
-                __instance.mouseOffset += new Vector2(-10f, -15f);
-                __instance.customDragAmount = true;
+                ___draggedAmount = 1;
+                ___draggedCashAmount = Mathf.Min(cashInstance.Balance, 100f);
+                ___mouseOffset += new Vector2(-10f, -15f);
+                ___customDragAmount = true;
             }
-            if (__instance.draggedCashAmount <= 0f)
+            if (___draggedCashAmount <= 0f)
             {
-                __instance.draggedSlot = null;
+                ___draggedSlot = null;
                 return false;
             }
             if (GameInput.GetButton(GameInput.ButtonCode.QuickMove) && __instance.QuickMoveEnabled)
             {
-                Il2CppSystem.Collections.Generic.List<ItemSlot> quickMoveSlots = __instance.GetQuickMoveSlots(__instance.draggedSlot.assignedSlot);
+                List<ItemSlot> quickMoveSlots = GetQuickMoveSlots(__instance, ___draggedSlot.assignedSlot);
+                //List<ItemSlot> quickMoveSlots = __instance.GetQuickMoveSlots(___draggedSlot.assignedSlot);
                 if (quickMoveSlots.Count > 0)
                 {
-                    Debug.Log("Quick-moving " + __instance.draggedAmount.ToString() + " items...");
-                    float a = __instance.draggedCashAmount;
+                    Debug.Log("Quick-moving " + ___draggedAmount.ToString() + " items...");
+                    float a = ___draggedCashAmount;
                     float num = 0f;
-                    int i = 0;
-                    while (i < quickMoveSlots.Count && num < (float)__instance.draggedAmount)
+                    int num2 = 0;
+                    while (num2 < quickMoveSlots.Count && num < (float)___draggedAmount)
                     {
-                        ItemSlot itemSlot = quickMoveSlots[i];
+                        ItemSlot itemSlot = quickMoveSlots[num2];
                         if (itemSlot.ItemInstance != null)
                         {
-                            CashInstance cashInstance2 = itemSlot.ItemInstance.Cast<CashInstance>();
+                            CashInstance cashInstance2 = CastTo<CashInstance>(itemSlot.ItemInstance);
                             if (cashInstance2 != null)
                             {
                                 float num3;
-                                // it's probably this conditional that's failing.
-                                // how to safely tell if this condition is true?
-                                if (itemSlot.TryCast<CashSlot>() != null)
+                                if (Is<CashSlot>(itemSlot))
                                 {
                                     num3 = Mathf.Min(a, float.MaxValue - cashInstance2.Balance);
                                 }
@@ -538,78 +562,86 @@ namespace ProduceMore
                         }
                         else
                         {
-                            CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
-                            cashInstance3.SetBalance(__instance.draggedCashAmount, false);
+                            CashInstance cashInstance3 = CastTo<CashInstance>(Registry.GetItem("cash").GetDefaultInstance(1));
+                            cashInstance3.SetBalance(___draggedCashAmount, false);
                             itemSlot.SetStoredItem(cashInstance3, false);
-                            num += __instance.draggedCashAmount;
+                            num += ___draggedCashAmount;
                         }
-                        i++;
+                        num2++;
                     }
                     if (num >= cashInstance.Balance)
                     {
-                        __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
+                        ___draggedSlot.assignedSlot.ClearStoredInstance(false);
                     }
                     else
                     {
                         cashInstance.ChangeBalance(-num);
-                        __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
+                        ___draggedSlot.assignedSlot.ReplicateStoredInstance();
                     }
                 }
                 if (__instance.onItemMoved != null)
                 {
                     __instance.onItemMoved.Invoke();
                 }
-                __instance.draggedSlot = null;
+                ___draggedSlot = null;
                 return false;
             }
             if (__instance.onDragStart != null)
             {
                 __instance.onDragStart.Invoke();
             }
-            if (__instance.draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
+            if (___draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
             {
                 __instance.CashSlotHintAnim.Play();
             }
-            __instance.tempIcon = __instance.draggedSlot.DuplicateIcon(Singleton<HUD>.Instance.transform, __instance.draggedAmount);
-            __instance.tempIcon.Find("Balance").GetComponent<TextMeshProUGUI>().text = MoneyManager.FormatAmount(__instance.draggedCashAmount, false, false);
-            __instance.draggedSlot.IsBeingDragged = true;
-            if (__instance.draggedCashAmount >= cashInstance.Balance)
+            ___tempIcon = ___draggedSlot.DuplicateIcon(Singleton<HUD>.Instance.transform, ___draggedAmount);
+            ___tempIcon.Find("Balance").GetComponent<TextMeshProUGUI>().text = MoneyManager.FormatAmount(___draggedCashAmount, false, false);
+            ___draggedSlot.IsBeingDragged = true;
+            if (___draggedCashAmount >= cashInstance.Balance)
             {
-                __instance.draggedSlot.SetVisible(false);
+                ___draggedSlot.SetVisible(false);
                 return false;
             }
-            (__instance.draggedSlot.ItemUI as ItemUI_Cash).SetDisplayedBalance(cashInstance.Balance - __instance.draggedCashAmount);
+            CastTo<ItemUI_Cash>(___draggedSlot.ItemUI).SetDisplayedBalance(cashInstance.Balance - ___draggedCashAmount);
             return false;
         }
 
         // This method has hardcoded constants, so we need to replace it completely
         [HarmonyPatch(typeof(ItemUIManager), "EndCashDrag")]
         [HarmonyPrefix]
-        public unsafe static bool EndCashDragPrefix(ItemUIManager __instance)
+        public unsafe static bool EndCashDragPrefix(ItemUIManager __instance,
+            ref float ___draggedCashAmount,
+            ref int ___draggedAmount,
+            ref ItemSlotUI ___draggedSlot,
+            ref Vector2 ___mouseOffset,
+            ref bool ___customDragAmount,
+            ref RectTransform ___tempIcon)
         {
             int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
             CashInstance cashInstance = null;
-            if (__instance.draggedSlot != null && __instance.draggedSlot.assignedSlot != null)
+            if (___draggedSlot != null && ___draggedSlot.assignedSlot != null)
             {
-                cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
+                cashInstance = CastTo<CashInstance>(___draggedSlot.assignedSlot.ItemInstance);
             }
 
             __instance.CashSlotHintAnim.Stop();
             __instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
-            if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
+            if (__instance.CanDragFromSlot(___draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchFilters(___draggedSlot.assignedSlot.ItemInstance))
             {
-                if (__instance.HoveredSlot.assignedSlot is HotbarSlot && !(__instance.HoveredSlot.assignedSlot is CashSlot))
+                if (Is<HotbarSlot>(__instance.HoveredSlot.assignedSlot) && !Is<CashSlot>(__instance.HoveredSlot.assignedSlot))
                 {
-                    __instance.HoveredSlot = Singleton<HUD>.Instance.cashSlotUI.GetComponent<CashSlotUI>();
+                    // how to retrieve a private setter?
+                    MethodInfo HoveredSlotSetterInfo = AccessTools.DeclaredPropertySetter(typeof(ItemUIManager), "HoveredSlot");
+                    HoveredSlotSetterInfo.Invoke(__instance, [Singleton<HUD>.Instance.cashSlotUI.GetComponent<CashSlotUI>()]);
                 }
-                float num = Mathf.Min(__instance.draggedCashAmount, cashInstance.Balance);
+                float num = Mathf.Min(___draggedCashAmount, cashInstance.Balance);
                 if (num > 0f)
                 {
                     float num2 = num;
                     if (__instance.HoveredSlot.assignedSlot.ItemInstance != null)
                     {
-                        CashInstance cashInstance2 = __instance.HoveredSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
-                        if (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot>() != null)
+                        CashInstance cashInstance2 = CastTo<CashInstance>(__instance.HoveredSlot.assignedSlot.ItemInstance);
+                        if (Is<CashSlot>(__instance.HoveredSlot.assignedSlot))
                         {
                             num2 = Mathf.Min(num, float.MaxValue - cashInstance2.Balance);
                         }
@@ -622,29 +654,28 @@ namespace ProduceMore
                     }
                     else
                     {
-                        CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
+                        CashInstance cashInstance3 = CastTo<CashInstance>(Registry.GetItem("cash").GetDefaultInstance(1));
                         cashInstance3.SetBalance(num2, false);
                         __instance.HoveredSlot.assignedSlot.SetStoredItem(cashInstance3, false);
                     }
                     if (num2 >= cashInstance.Balance)
                     {
-                        __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
+                        ___draggedSlot.assignedSlot.ClearStoredInstance(false);
                     }
                     else
                     {
                         cashInstance.ChangeBalance(-num2);
-                        __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
+                        ___draggedSlot.assignedSlot.ReplicateStoredInstance();
                     }
                 }
             }
-            __instance.draggedSlot.SetVisible(true);
-            __instance.draggedSlot.UpdateUI();
-            __instance.draggedSlot.IsBeingDragged = false;
-            __instance.draggedSlot = null;
-            UnityEngine.Object.Destroy(__instance.tempIcon.gameObject);
+            ___draggedSlot.SetVisible(true);
+            ___draggedSlot.UpdateUI();
+            ___draggedSlot.IsBeingDragged = false;
+            ___draggedSlot = null;
+            UnityEngine.Object.Destroy(___tempIcon.gameObject);
             Singleton<CursorManager>.Instance.SetCursorAppearance(CursorManager.ECursorType.Default);
             return false;
         }
     }
-
 }

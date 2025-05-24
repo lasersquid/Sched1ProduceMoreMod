@@ -1,35 +1,17 @@
-﻿using HarmonyLib;
-using Il2CppInterop.Runtime;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
+﻿using MelonLoader;
+using MelonLoader.Utils;
+using Newtonsoft.Json;
+
+#if MONO_BUILD
+using ScheduleOne.EntityFramework;
+using ScheduleOne.ItemFramework;
+using ScheduleOne.StationFramework;
+#else
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ItemFramework;
-using Il2CppScheduleOne.ObjectScripts;
-using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.StationFramework;
-using Il2CppScheduleOne.UI.Items;
-using Il2CppScheduleOne.UI.Phone.Delivery;
-using Il2CppSystem;
-using MelonLoader;
-using MelonLoader.Utils;
-using Microsoft.Diagnostics.Runtime;
-using Mono.Cecil;
-using Newtonsoft.Json;
-using System;
-using System;
-using System.Collections;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
-using UnityEngine;
-using static Il2CppScheduleOne.DevUtilities.ValueTracker;
-using static Il2CppSystem.Threading.Timer;
-using static System.Net.Mime.MediaTypeNames;
+#endif
+
 
 
 [assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.0", "lasersquid", null)]
@@ -43,6 +25,7 @@ namespace ProduceMore
 		public HashSet<GridItem> processedStationSpeeds = new HashSet<GridItem>();
 		public HashSet<ItemDefinition> processedDefs = new HashSet<ItemDefinition>();
 		public HashSet<StationRecipe> processedRecipes = new HashSet<StationRecipe>();
+
 		public ModSettings settings;
 		public const string settingsFileName = "ProduceMoreSettings.json";
 		public string settingsFilePath = Path.Combine(MelonEnvironment.UserDataDirectory, settingsFileName);
@@ -53,31 +36,30 @@ namespace ProduceMore
 		{
 			LoadSettings();
 			SetMod();
-			LoggerInstance.Msg($"ProduceMore mod initialized.");
+			harmony.PatchAll();
+			LoggerInstance.Msg("Initialized.");
 		}
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
-			LoggerInstance.Msg($"Scene loaded: {sceneName}");
 			if (sceneName.ToLower().Contains("menu"))
 			{
 				LoggerInstance.Msg("Menu loaded, resetting state.");
-				processedStationCapacities = new HashSet<GridItem>();
-				processedStationSpeeds = new HashSet<GridItem>();
-				processedDefs = new HashSet<ItemDefinition>();
-				processedRecipes = new HashSet<StationRecipe>();
-
-				//LoggerInstance.Msg("Attempting late patching.");
-				//ApplyTranspilerPatches();
-				//LoggerInstance.Msg("Dump of ItemUiManager.UpdateCashDragAmount");
-				//System.IntPtr handle = IL2CPP.GetIl2CppMethodByToken(Il2CppClassPointerStore<ItemUIManager>.NativeClassPtr, 100683405);
-                //DumpBinary(handle, 1024);
+				ResetState();
 			}
+		}
+
+		private void ResetState()
+		{
+			processedStationCapacities = new HashSet<GridItem>();
+			processedStationSpeeds = new HashSet<GridItem>();
+			processedDefs = new HashSet<ItemDefinition>();
+			processedRecipes = new HashSet<StationRecipe>();
 		}
 
         private void LoadSettings()
 		{
-			MelonLogger.Msg($"Settings loaded from {settingsFilePath}");
+			MelonLogger.Msg($"Loading settings from {settingsFilePath}");
 			settings = ModSettings.LoadSettings(settingsFilePath);
 			if (!File.Exists(settingsFilePath))
 			{
@@ -106,33 +88,6 @@ namespace ProduceMore
 			ChemistryStationPatches.Mod = this;
 			CashPatches.Mod = this;
         }
-	
-		/**
-		private unsafe void DumpBinary(System.IntPtr handle, int bytes)
-		{
-			if (handle == System.IntPtr.Zero)
-			{
-				return;
-			}
-
-			// Read bytes into an array
-			System.ReadOnlySpan<byte> byteSpan = new System.ReadOnlySpan<byte>((void *)handle, bytes);
-			byte[] byteArray = byteSpan.ToArray();
-
-            //int value = Marshal.ReadInt32(ptr);
-
-            // Create the disassembler
-            SharpDisasm.ArchitectureMode mode = SharpDisasm.ArchitectureMode.x86_32;
-            SharpDisasm.Disassembler.Translator.IncludeAddress = true;
-            SharpDisasm.Disassembler.Translator.IncludeBinary = true;
-
-			SharpDisasm.Disassembler disasm = new SharpDisasm.Disassembler(byteArray, mode, 0, true);
-
-            // Disassemble each instruction and output to console
-            foreach (SharpDisasm.Instruction instruction in disasm.Disassemble())
-                MelonLogger.Msg(instruction.ToString());
-        }
-		*/
 	}
 
 	public class ModSettings
@@ -154,8 +109,8 @@ namespace ProduceMore
             if (File.Exists(jsonPath))
             {
                 string json = File.ReadAllText(jsonPath);
-                var fromFile = JsonConvert.DeserializeObject<ModSettings>(json);
-				var defaultSettings = new ModSettings();
+                ModSettings fromFile = JsonConvert.DeserializeObject<ModSettings>(json);
+				ModSettings defaultSettings = new ModSettings();
 
 				foreach (KeyValuePair<EItemCategory, int> entry in defaultSettings.stackSizes)
 				{
@@ -215,15 +170,20 @@ namespace ProduceMore
 
 		public void SaveSettings(string jsonPath)
 		{
-			string json = JsonConvert.SerializeObject(this, Formatting.Indented);
-			File.WriteAllText(jsonPath, json);
+			File.WriteAllText(jsonPath, this.ToString());
+		}
+
+		public override string ToString()
+		{
+			return JsonConvert.SerializeObject(this, Formatting.Indented);
 		}
 
 		public void PrintSettings()
 		{
 			MelonLogger.Msg("Settings:");
-			MelonLogger.Msg(JsonConvert.SerializeObject(this, Formatting.Indented));
+			MelonLogger.Msg($"{this}");
 		}
+
 		public ModSettings()
 		{
 			// Default stack sizes
@@ -249,7 +209,7 @@ namespace ProduceMore
 			stationSpeeds.Add("PackagingStation", 1);
 			stationSpeeds.Add("Pot", 1);
 
-			// Station processing capacities
+			// Default station processing capacities
 			stationCapacities.Add("DryingRack", 20);
 			stationCapacities.Add("MixingStation", 20);
 			stationCapacities.Add("PackagingStation", 20);
@@ -337,15 +297,15 @@ namespace ProduceMore
 
 // increase stack limits by category, with individual overrides - done
 // increase processing limit and speed of lab stations
-//	- chem station (possible/sensical?) - might do
-//	- lab oven - speed done; won't do capacity
-//	- drying rack - done - speed & capacity
-//	- mixing station - done - speed & capacity
-//	- brick press - might do
+//	- chem station - speed done; won't do capacity/batchsize
+//	- lab oven - speed done; won't do capacity/batchsize
+//	- drying rack - done
+//	- mixing station - done
+//	- brick press - won't do
 //	- packaging station - done
-//  - cauldron - done - speed; capacity does itself
+//  - cauldron - speed done; won't do capacity/batchsize
 // add plant growth multiplier - done
-// cash stack size - testing
+// cash stack size - done
 // detect malformed settings - done
 // keep dict of default settings - done
 // refresh processed<stations/recipes> when returning to title screen/on settings update - done
@@ -355,17 +315,17 @@ namespace ProduceMore
 
 
 // Testing:
-// ItemInstancePatches - testing listingentry patch for shops
-// ChemistryStationPatches - speed working; UI needs update
+// ItemInstancePatches - working
+// ChemistryStationPatches - working
 // DryingRackPatches - working
 // LabOvenPatches - working
-// MixingStationPatches - working, except worker sometimes gets stuck? might not be my fault
+// MixingStationPatches - working
 // BrickPressPatches - working
 // CauldronPatches - working
 // PackagingStationPatches - working
 // PotPatches - working
-// CashPatches - in testing
+// CashPatches - working
 
 // Bugs:
-// - can't enter quantity in shops
+// - can't enter quantity in shops -- not my bug
 // - if you shift-click a stack of cash, your inventory cash sometimes deposits itself into the slot -- FIXED
