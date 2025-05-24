@@ -368,4 +368,4 @@ namespace ProduceMore
 
 // Bugs:
 // - can't enter quantity in shops
-// - if you shift-click a stack of cash, your inventory cash sometimes deposits itself into the slot
+// - if you shift-click a stack of cash, your inventory cash sometimes deposits itself into the slot -- FIXED

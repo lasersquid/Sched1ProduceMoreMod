@@ -486,12 +486,9 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool StartDragCashPrefix(ItemUIManager __instance)
         {
-            Mod.LoggerInstance.Msg($"In {System.Reflection.MethodBase.GetCurrentMethod().Name}");
-
             int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
 
             CashInstance cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
-
             __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, stackLimit);
             __instance.draggedAmount = 1;
             if (GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick))
@@ -506,25 +503,20 @@ namespace ProduceMore
                 __instance.draggedSlot = null;
                 return false;
             }
-            Mod.LoggerInstance.Msg($"DraggedCashAmount is {__instance.draggedCashAmount}");
             if (GameInput.GetButton(GameInput.ButtonCode.QuickMove) && __instance.QuickMoveEnabled)
             {
                 Il2CppSystem.Collections.Generic.List<ItemSlot> quickMoveSlots = __instance.GetQuickMoveSlots(__instance.draggedSlot.assignedSlot);
                 if (quickMoveSlots.Count > 0)
                 {
-                    Mod.LoggerInstance.Msg($"Quick-moving {__instance.draggedAmount} items ({__instance.draggedCashAmount})");
                     Debug.Log("Quick-moving " + __instance.draggedAmount.ToString() + " items...");
                     float a = __instance.draggedCashAmount;
                     float num = 0f;
                     int i = 0;
-                    Mod.LoggerInstance.Msg($"starting loop. num = {num}; i = {i}");
                     while (i < quickMoveSlots.Count && num < (float)__instance.draggedAmount)
                     {
-                        Mod.LoggerInstance.Msg($"in loop {i}, num = {num}");
                         ItemSlot itemSlot = quickMoveSlots[i];
                         if (itemSlot.ItemInstance != null)
                         {
-                            Mod.LoggerInstance.Msg($"itemSlot is {itemSlot.Pointer}");
                             CashInstance cashInstance2 = itemSlot.ItemInstance.Cast<CashInstance>();
                             if (cashInstance2 != null)
                             {
@@ -533,53 +525,32 @@ namespace ProduceMore
                                 // how to safely tell if this condition is true?
                                 if (itemSlot.TryCast<CashSlot>() != null)
                                 {
-                                    Mod.LoggerInstance.Msg($"itemSlot {itemSlot.Pointer} is CashSlot.");
-                                    if (IsPlayerCashSlot(itemSlot))
-                                    {
-                                        Mod.LoggerInstance.Msg($"itemSlot is player cashslot.");
-                                        Mod.LoggerInstance.Msg($"itemSlot: {itemSlot.Pointer}; itemSlot.ItemInstance: {itemSlot.ItemInstance.Pointer}");
-                                    }
                                     num3 = Mathf.Min(a, float.MaxValue - cashInstance2.Balance);
-                                    Mod.LoggerInstance.Msg($"num3 ({num3}) = Mathf.Min(a ({a}), float.MaxValue ({float.MaxValue}) - cashInstance2.Balance ({cashInstance2.Balance} = {float.MaxValue - cashInstance2.Balance})");
                                 }
                                 else
                                 {
-                                    Mod.LoggerInstance.Msg($"itemSlot is not player cashslot.");
-                                    Mod.LoggerInstance.Msg($"itemSlot: {itemSlot.Pointer}; itemSlot.ItemInstance: {itemSlot.ItemInstance.Pointer}");
                                     num3 = Mathf.Min(a, stackLimit - cashInstance2.Balance);
-                                    Mod.LoggerInstance.Msg($"num3 ({num3}) = Mathf.Min(a ({a}), stackLimit ({stackLimit}) - cashInstance2.Balance ({cashInstance2.Balance} = {stackLimit - cashInstance2.Balance})");
                                 }
-                                Mod.LoggerInstance.Msg($"Changing balance of cashInstance2 {cashInstance2.Pointer} to {num3}");
                                 cashInstance2.ChangeBalance(num3);
                                 itemSlot.ReplicateStoredInstance();
-                                Mod.LoggerInstance.Msg($"num = num ({num}) + num3 ({num3}) = {num + num3}");
                                 num += num3;
                             }
                         }
                         else
                         {
                             CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
-                            Mod.LoggerInstance.Msg($"Changing balance of cashInstance3 {cashInstance3.Pointer} from {cashInstance3.Balance} to {__instance.draggedCashAmount}");
                             cashInstance3.SetBalance(__instance.draggedCashAmount, false);
                             itemSlot.SetStoredItem(cashInstance3, false);
-                            Mod.LoggerInstance.Msg($"Num = {num} + {__instance.draggedCashAmount}");
                             num += __instance.draggedCashAmount;
                         }
                         i++;
                     }
                     if (num >= cashInstance.Balance)
                     {
-                        Mod.LoggerInstance.Msg($"num ({num}) >= cashInstance.Balance ({cashInstance.Balance}");
-                        Mod.LoggerInstance.Msg($"Clearing stored instance for __instance.draggedSlot.assignedSlot ({__instance.draggedSlot.assignedSlot.Pointer})");
                         __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
                     }
                     else
                     {
-                        if (num < 0)
-                        {
-                            Mod.LoggerInstance.Msg($"Did stacks just break?");
-                        }
-                        Mod.LoggerInstance.Msg($"Changing balance of cashInstance {cashInstance.Pointer} to {cashInstance.Balance - num} (num is {num})");
                         cashInstance.ChangeBalance(-num);
                         __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
                     }
@@ -635,27 +606,17 @@ namespace ProduceMore
                 if (num > 0f)
                 {
                     float num2 = num;
-                    Mod.LoggerInstance.Msg($"num is {num}; num2 is {num2}");
                     if (__instance.HoveredSlot.assignedSlot.ItemInstance != null)
                     {
                         CashInstance cashInstance2 = __instance.HoveredSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
-                        Mod.LoggerInstance.Msg($"cashInstance2 is {cashInstance2.Pointer}, balance is {cashInstance2.Balance}");
                         if (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot>() != null)
                         {
-                            Mod.LoggerInstance.Msg($"__instance.HoveredSlot.assignedSlot {__instance.HoveredSlot.assignedSlot.Pointer} is CashSlot.");
-                            if (IsPlayerCashSlot(__instance.HoveredSlot.assignedSlot))
-                            {
-                                Mod.LoggerInstance.Msg($"itemSlot is player cashslot.");
-                                Mod.LoggerInstance.Msg($"itemSlot: {__instance.HoveredSlot.assignedSlot.Pointer}; itemSlot.ItemInstance: {__instance.HoveredSlot.assignedSlot.ItemInstance.Pointer}");
-                            }
-                            
                             num2 = Mathf.Min(num, float.MaxValue - cashInstance2.Balance);
                         }
                         else
                         {
                             num2 = Mathf.Min(num, stackLimit - cashInstance2.Balance);
                         }
-                        Mod.LoggerInstance.Msg($"Change balance of cashInstance2 ({cashInstance2.Pointer}) to num2 ({num2})");
                         cashInstance2.ChangeBalance(num2);
                         __instance.HoveredSlot.assignedSlot.ReplicateStoredInstance();
                     }
@@ -664,16 +625,13 @@ namespace ProduceMore
                         CashInstance cashInstance3 = Registry.GetItem("cash").GetDefaultInstance(1).Cast<CashInstance>();
                         cashInstance3.SetBalance(num2, false);
                         __instance.HoveredSlot.assignedSlot.SetStoredItem(cashInstance3, false);
-                        Mod.LoggerInstance.Msg($"Create cashInstance3 ({cashInstance3.Pointer}; set balance to num2 ({num2}); set stored item of slot ({__instance.HoveredSlot.assignedSlot.Pointer}) to cashInstance3");
                     }
                     if (num2 >= cashInstance.Balance)
                     {
-                        Mod.LoggerInstance.Msg($"num2 ({num2} >= cashInstance.Balance ({cashInstance.Balance}); clearing stored instance for itemslot {__instance.draggedSlot.assignedSlot.Pointer}");
                         __instance.draggedSlot.assignedSlot.ClearStoredInstance(false);
                     }
                     else
                     {
-                        Mod.LoggerInstance.Msg($"changing cashInstance.Balance from {cashInstance.Balance} to {-num2}");
                         cashInstance.ChangeBalance(-num2);
                         __instance.draggedSlot.assignedSlot.ReplicateStoredInstance();
                     }
