@@ -411,6 +411,7 @@ namespace ProduceMore
 // phone app for configuration - next ver
 // support for changing settings on the fly - backend logic ready; still needs interface to test (next ver)
 // injecting into savefile - next ver
+// configurable via mod manager app -- incompatible with savefile injection?
 
 
 // Testing:
