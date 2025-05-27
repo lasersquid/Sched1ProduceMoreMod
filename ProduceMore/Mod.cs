@@ -2,6 +2,8 @@
 using MelonLoader.Utils;
 using Newtonsoft.Json;
 using HarmonyLib;
+using System.Reflection;
+
 
 
 #if MONO_BUILD
@@ -21,12 +23,35 @@ using Il2CppScheduleOne.StationFramework;
 
 namespace ProduceMore
 {
+	
 	public class ProduceMoreMod : MelonMod
 	{
-		public HashSet<GridItem> processedStationCapacities = new HashSet<GridItem>();
-		public HashSet<GridItem> processedStationSpeeds = new HashSet<GridItem>();
-		public HashSet<ItemDefinition> processedDefs = new HashSet<ItemDefinition>();
-		public HashSet<StationRecipe> processedRecipes = new HashSet<StationRecipe>();
+		public ProduceMoreMod()
+		{
+			unityComparer = new UnityObjectComparer();
+			processedStationCapacities = new HashSet<GridItem>(unityComparer);
+			processedStationSpeeds = new HashSet<GridItem>(unityComparer);
+			processedStationTimes = new HashSet<GridItem>(unityComparer);
+			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
+			processedRecipes = new HashSet<StationRecipe>(unityComparer);
+
+			originalStackLimits = new Dictionary<EItemCategory, int>();
+			originalStationCapacities = new Dictionary<string, int>();
+			originalStationTimes = new Dictionary<string, int>();
+			originalRecipeTimes = new Dictionary<StationRecipe, int>(unityComparer);
+		}
+
+		public IEqualityComparer<UnityEngine.Object> unityComparer;
+		public HashSet<GridItem> processedStationCapacities;
+		public HashSet<GridItem> processedStationSpeeds;
+		public HashSet<GridItem> processedStationTimes;
+		public HashSet<ItemDefinition> processedItemDefs;
+		public HashSet<StationRecipe> processedRecipes;
+		public Dictionary<EItemCategory, int> originalStackLimits;
+		public Dictionary<string, int> originalStationCapacities;
+		public Dictionary<string, int> originalStationTimes;
+		public Dictionary<StationRecipe, int> originalRecipeTimes;
+		public bool needsReset = false;
 
 		public ModSettings settings;
 		public const string settingsFileName = "ProduceMoreSettings.json";
@@ -43,6 +68,7 @@ namespace ProduceMore
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
+			LoggerInstance.Msg($"Loaded scene {sceneName}.");
 			if (sceneName.ToLower().Contains("menu"))
 			{
 				LoggerInstance.Msg("Menu loaded, resetting state.");
@@ -52,10 +78,12 @@ namespace ProduceMore
 
 		private void ResetState()
 		{
-			processedStationCapacities = new HashSet<GridItem>();
-			processedStationSpeeds = new HashSet<GridItem>();
-			processedDefs = new HashSet<ItemDefinition>();
-			processedRecipes = new HashSet<StationRecipe>();
+			RestoreDefaults();
+			processedStationCapacities = new HashSet<GridItem>(unityComparer);
+			processedStationSpeeds = new HashSet<GridItem>(unityComparer);
+			processedStationTimes = new HashSet<GridItem>(unityComparer);
+			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
+			processedRecipes = new HashSet<StationRecipe>(unityComparer);
 		}
 
 		private void LoadSettings()
@@ -76,35 +104,48 @@ namespace ProduceMore
 			}
 		}
 		
+
 		private void SetMod()
 		{
-			// this was so elegant. alas, AccessToolsExtensions is not available in HarmonyX
-			// (and I don't know how to select harmonylib 2.3.6 over harmonyx 2.10.12 at runtime in a class library)
-			/*
-			Type[] types =
-                (Type[])System.Reflection.Assembly.GetExecutingAssembly()
+			List<Type> types = System.Reflection.Assembly.GetExecutingAssembly()
 				.GetTypes()
-				.Where(t => t.Namespace.StartsWith("ProduceMore") && t.Name.EndsWith("Patches"));
+				.Where(t => t.Name.EndsWith("Patches"))
+				.ToList<Type>();
 
             foreach (var t in types)
             {
-				LoggerInstance.Msg($"Setting Mod for {t.Name}");
-				t.StaticFieldRefAccess<ProduceMoreMod>("Mod") = this;
+				var method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+				method.Invoke(null, [this]);
             }
-			*/
-
-			ItemCapacityPatches.Mod = this;
-			DryingRackPatches.Mod = this;
-			LabOvenPatches.Mod = this;
-			MixingStationPatches.Mod = this;
-			BrickPressPatches.Mod = this;
-			CauldronPatches.Mod = this;
-			PackagingStationPatches.Mod = this;
-			PotPatches.Mod = this;
-			ChemistryStationPatches.Mod = this;
-			CashPatches.Mod = this;
-			
         }
+
+		public void RestoreDefaults()
+		{
+			List<Type> types = System.Reflection.Assembly.GetExecutingAssembly()
+				.GetTypes()
+				.Where(t => t.Name.EndsWith("Patches"))
+				.ToList<Type>();
+
+            foreach (var t in types)
+            {
+				try
+				{
+					MethodInfo methodInfo = t.GetMethod("RestoreDefaults", BindingFlags.Public | BindingFlags.Static);
+					methodInfo.Invoke(null, null);
+				}
+				catch (Exception e)
+				{
+					LoggerInstance.Warning($"Couldn't restore defaults for class {t.Name}: {e.GetType().Name} - {e.Message}");
+					LoggerInstance.Warning($"Source: {e.Source}");
+					if (e.InnerException != null)
+					{
+						LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
+						LoggerInstance.Warning($"Source: {e.InnerException.Source}");
+					}
+				}
+            }
+
+		}
 	}
 
 	public class ModSettings
@@ -237,9 +278,18 @@ namespace ProduceMore
 
 			if (!stackOverrides.TryGetValue(item.Name, out stackLimit))
 			{
-				if (!stackSizes.TryGetValue(item.Category, out stackLimit))
+				EItemCategory category;
+				if (item.Definition.Name == "Speed Grow")
 				{
-					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {item.Category}");
+					category = EItemCategory.Growing;
+				}
+                else
+                {
+					category = item.Category;
+                }
+                if (!stackSizes.TryGetValue(category, out stackLimit))
+				{
+					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {category}");
 				}
 			}
 
@@ -252,9 +302,18 @@ namespace ProduceMore
 			int stackLimit = 10;
             if (!stackOverrides.TryGetValue(itemDef.Name, out stackLimit))
             {
-                if (!stackSizes.TryGetValue(itemDef.Category, out stackLimit))
+				EItemCategory category;
+				if (itemDef.Name == "Speed Grow")
+				{
+					category = EItemCategory.Growing;
+				}
+                else
                 {
-                    MelonLogger.Msg($"Couldn't find stack size for item {itemDef.Name} with category {itemDef.Category}");
+					category = itemDef.Category;
+                }
+                if (!stackSizes.TryGetValue(category, out stackLimit))
+                {
+                    MelonLogger.Msg($"Couldn't find stack size for item {itemDef.Name} with category {category}");
                 }
             }
 
@@ -267,9 +326,18 @@ namespace ProduceMore
 
 			if (!stackOverrides.TryGetValue(itemName, out stackLimit))
 			{
-				if (!stackSizes.TryGetValue(category, out stackLimit))
+				EItemCategory actualCategory;
+				if (itemName == "Speed Grow")
 				{
-					MelonLogger.Msg($"Couldn't find stack size for item {itemName} with category {category}");
+					actualCategory = EItemCategory.Growing;
+				}
+				else
+				{
+					actualCategory = category;
+				}
+				if (!stackSizes.TryGetValue(actualCategory, out stackLimit))
+				{
+					MelonLogger.Msg($"Couldn't find stack size for item {itemName} with category {actualCategory}");
 				}
 			}
 			return stackLimit;
@@ -307,9 +375,23 @@ namespace ProduceMore
 			}
 
 			return speed;
-
 		}
 	}
+
+	// Compare unity objects by their instance ID
+    public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
+    {
+        public bool Equals(UnityEngine.Object a, UnityEngine.Object b)
+        {
+            return a.GetInstanceID() == b.GetInstanceID();
+        }
+
+        public int GetHashCode(UnityEngine.Object item)
+        {
+            return item.GetInstanceID();
+        }
+
+    }
 }
 
 // increase stack limits by category, with individual overrides - done
@@ -357,5 +439,6 @@ namespace ProduceMore
 
 
 // Bugs:
-//	none yet :)
-
+//	- chemistry multiplier re-applies if you load to menu and back - fixed
+//	- mixers finish instantly - fixed
+//	- mixer capturing original mix time as 3 - fixed
