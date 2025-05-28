@@ -51,7 +51,7 @@ namespace ProduceMore
 		public Dictionary<string, int> originalStationCapacities;
 		public Dictionary<string, int> originalStationTimes;
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
-		public bool needsReset = false;
+		private bool needsReset = false;
 
 		public ModSettings settings;
 		public const string settingsFileName = "ProduceMoreSettings.json";
@@ -68,11 +68,18 @@ namespace ProduceMore
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
-			LoggerInstance.Msg($"Loaded scene {sceneName}.");
+			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
+			{
+				needsReset = true;
+			}
+
 			if (sceneName.ToLower().Contains("menu"))
 			{
-				LoggerInstance.Msg("Menu loaded, resetting state.");
-				ResetState();
+				if (needsReset)
+				{
+					LoggerInstance.Msg("Menu loaded, resetting state.");
+					ResetState();
+				}
 			}
 		}
 
@@ -84,6 +91,7 @@ namespace ProduceMore
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
 			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
+			needsReset = false;
 		}
 
 		private void LoadSettings()
@@ -104,47 +112,39 @@ namespace ProduceMore
 			}
 		}
 		
-
-		private void SetMod()
+		private List<Type> GetPatchTypes()
 		{
-			List<Type> types = System.Reflection.Assembly.GetExecutingAssembly()
+			return  System.Reflection.Assembly.GetExecutingAssembly()
 				.GetTypes()
 				.Where(t => t.Name.EndsWith("Patches"))
 				.ToList<Type>();
+		}
 
-            foreach (var t in types)
+		private void SetMod()
+		{
+            foreach (var t in GetPatchTypes())
             {
-				var method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+				MethodInfo method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
 				method.Invoke(null, [this]);
             }
         }
 
 		public void RestoreDefaults()
 		{
-			List<Type> types = System.Reflection.Assembly.GetExecutingAssembly()
-				.GetTypes()
-				.Where(t => t.Name.EndsWith("Patches"))
-				.ToList<Type>();
-
-            foreach (var t in types)
+            foreach (var t in GetPatchTypes())
             {
 				try
 				{
-					MethodInfo methodInfo = t.GetMethod("RestoreDefaults", BindingFlags.Public | BindingFlags.Static);
-					methodInfo.Invoke(null, null);
+					MethodInfo method = t.GetMethod("RestoreDefaults", BindingFlags.Public | BindingFlags.Static);
+					method.Invoke(null, null);
 				}
 				catch (Exception e)
 				{
 					LoggerInstance.Warning($"Couldn't restore defaults for class {t.Name}: {e.GetType().Name} - {e.Message}");
 					LoggerInstance.Warning($"Source: {e.Source}");
-					if (e.InnerException != null)
-					{
-						LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-						LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-					}
+					LoggerInstance.Warning($"{e.StackTrace}");
 				}
             }
-
 		}
 	}
 
@@ -287,6 +287,7 @@ namespace ProduceMore
                 {
 					category = item.Category;
                 }
+
                 if (!stackSizes.TryGetValue(category, out stackLimit))
 				{
 					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {category}");
@@ -412,6 +413,7 @@ namespace ProduceMore
 // support for changing settings on the fly - backend logic ready; still needs interface to test (next ver)
 // injecting into savefile - next ver
 // configurable via mod manager app -- incompatible with savefile injection?
+// separate mixingstation mk1 and mk2 - soon
 
 
 // Testing:
@@ -440,6 +442,6 @@ namespace ProduceMore
 
 
 // Bugs:
-//	- chemistry multiplier re-applies if you load to menu and back - fixed
+//	- chemistry station multiplier re-applies if you load to menu and back - fixed
 //	- mixers finish instantly - fixed
 //	- mixer capturing original mix time as 3 - fixed

@@ -1,4 +1,11 @@
-﻿
+﻿using HarmonyLib;
+using System.Reflection;
+using UnityEngine;
+using System.Reflection.Emit;
+using MelonLoader;
+
+
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.ItemFramework;
@@ -13,7 +20,6 @@ using ScheduleOne.UI.Stations;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
-using Il2CppInterop.Runtime.Startup;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Money;
@@ -42,9 +48,16 @@ namespace ProduceMore
             Mod = mod;
         }
 
-        public static T CastTo<T>(object o)
+        public static T CastTo<T>(object o) where T : class
         {
-            return (T)o;
+            if (o is T)
+            {
+                return (T)o;
+            }
+            else
+            {
+                return null;
+            }
         }
         public static bool Is<T>(object o)
         {
@@ -79,18 +92,19 @@ namespace ProduceMore
         {
             if (!Mod.processedItemDefs.Contains(__instance.Definition) && __instance.Definition.Name.ToLower() != "cash")
             {
-                if (!Mod.originalStackLimits.ContainsKey(__instance.Definition.Category))
+                // Speed Grow is classified as product for some reason
+                EItemCategory category;
+                if (__instance.Definition.Name == "Speed Grow")
                 {
-                    EItemCategory category;
-                    if (__instance.Definition.Name == "Speed Grow")
-                    {
-                        category = EItemCategory.Growing;
-                    }
-                    else
-                    {
-                        category = __instance.Definition.Category;
-                    }
-                    Mod.LoggerInstance.Msg($"Captured original stacklimit of {category} as {__instance.Definition.StackLimit}");
+                    category = EItemCategory.Growing;
+                }
+                else
+                {
+                    category = __instance.Definition.Category;
+                }
+
+                if (!Mod.originalStackLimits.ContainsKey(category))
+                {
                     Mod.originalStackLimits[category] = __instance.Definition.StackLimit; 
                 }
 
@@ -109,18 +123,19 @@ namespace ProduceMore
             {
                 if (!Mod.processedItemDefs.Contains(match.Item) && match.Item.Name.ToLower() != "cash")
                 {
-                    if (!Mod.originalStackLimits.ContainsKey(match.Item.Category))
+                    // Speed Grow is classified as product for some reason
+                    EItemCategory category;
+                    if (match.Item.Name == "Speed Grow")
                     {
-                        EItemCategory category;
-                        if (match.Item.Name == "Speed Grow")
-                        {
-                            category = EItemCategory.Growing;
-                        }
-                        else
-                        {
-                            category = match.Item.Category;
-                        }
-                        Mod.LoggerInstance.Msg($"Captured original stacklimit of {category} as {match.Item.StackLimit}");
+                        category = EItemCategory.Growing;
+                    }
+                    else
+                    {
+                        category = match.Item.Category;
+                    }
+
+                    if (!Mod.originalStackLimits.ContainsKey(category))
+                    {
                         Mod.originalStackLimits[category] = match.Item.StackLimit;
                     }
                     int stackLimit = Mod.settings.GetStackLimit(match.Item);
@@ -147,7 +162,6 @@ namespace ProduceMore
                         {
                             itemDef.StackLimit = (int)Mod.originalStackLimits[itemDef.Category];
                         }
-                        Mod.processedItemDefs.Remove(itemDef);
                     }
                 }
             }
@@ -155,12 +169,7 @@ namespace ProduceMore
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
 				Mod.LoggerInstance.Warning($"Source: {e.Source}");
-				if (e.InnerException != null)
-				{
-					Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-					Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-				}
-
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
 
@@ -196,7 +205,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool CanStartOperationPrefix(DryingRack __instance, ref bool __result)
         {
-            //if (__instance.ItemCapacity != Mod.settings.GetStationCapacity("DryingRack"))
             if (!Mod.processedStationCapacities.Contains(__instance))
             {
                 if (!Mod.originalStationCapacities.ContainsKey("DryingRack"))
@@ -307,8 +315,6 @@ namespace ProduceMore
                         {
                             rack.ItemCapacity = Mod.originalStationCapacities["DryingRack"];
                         }
-                        Mod.processedStationCapacities.Remove(rack);
-                        Mod.LoggerInstance.Msg($"Reset capacity for {rack.GetType().Name} {rack.GetInstanceID()}");
                     }
                 }
             }
@@ -316,16 +322,10 @@ namespace ProduceMore
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
 				Mod.LoggerInstance.Warning($"Source: {e.Source}");
-				if (e.InnerException != null)
-				{
-					Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-					Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-				}
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
-
-
     }
 
 
@@ -336,25 +336,16 @@ namespace ProduceMore
         // speed
         [HarmonyPatch(typeof(OvenCookOperation), "GetCookDuration")]
         [HarmonyPostfix]
-        public static void GetCookDurationPostfix(ref int __result)
+        public static void GetCookDurationPostfix(OvenCookOperation __instance, ref int __result)
         {
             if (!Mod.originalStationTimes.ContainsKey("LabOven"))
             {
-                Mod.originalStationTimes["LabOven"] = __result;
+                Mod.originalStationTimes["LabOven"] = __instance.Ingredient.StationItem.GetModule<CookableModule>().CookTime;
             }
-            __result = (int)((float)__result / Mod.settings.GetStationSpeed("LabOven"));
+            __result = (int)((float)Mod.originalStationTimes["LabOven"] / Mod.settings.GetStationSpeed("LabOven"));
         }
 
-#if MONO_BUILD
-
-        // might need to patch IsReadyForHarvest
-        //[HarmonyPatch(typeof(OvenCookOperation), "IsReadyForHarvest")]
-        //[HarmonyPostfix]
-        public static void IsReadyForHarvestPostfix(OvenCookOperation __instance)
-        {
-
-        }
-#else
+#if !MONO_BUILD
 
         // call to GetCookDuration seems to have been optimized out.
         [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
@@ -420,8 +411,6 @@ namespace ProduceMore
             {
                 if (!Mod.originalStationTimes.ContainsKey("MixingStation"))
                 {
-                    // we can't just capture MixTimePerItem because that data is saved. this makes the divider compound over successive save/loads
-                    //Mod.originalStationTimes["MixingStation"] = __instance.MixTimePerItem;
                     // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
                     Mod.originalStationTimes["MixingStation"] = 15;
                 }
@@ -473,7 +462,6 @@ namespace ProduceMore
                         {
                             mixingStation.MaxMixQuantity = Mod.originalStationCapacities["MixingStation"];
                         }
-                        Mod.processedStationCapacities.Remove(station);
                     }
                 }
 
@@ -490,7 +478,6 @@ namespace ProduceMore
                         {
                             mixingStation.MixTimePerItem = Mod.originalStationTimes["MixingStation"];
                         }
-                        Mod.processedStationTimes.Remove(mixingStation);
                     }
                 }
             }
@@ -498,11 +485,7 @@ namespace ProduceMore
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
 				Mod.LoggerInstance.Warning($"Source: {e.Source}");
-				if (e.InnerException != null)
-				{
-					Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-					Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-				}
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
@@ -645,7 +628,6 @@ namespace ProduceMore
                             cauldron.RemainingCookTime = Mathf.Min(Mod.originalStationTimes["Cauldron"], cauldron.RemainingCookTime);
 
                         }
-                        Mod.processedStationTimes.Remove(station);
                     }
                 }
             }
@@ -653,11 +635,7 @@ namespace ProduceMore
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
 				Mod.LoggerInstance.Warning($"Source: {e.Source}");
-				if (e.InnerException != null)
-				{
-					Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-					Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-				}
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
@@ -694,7 +672,6 @@ namespace ProduceMore
                     if (packagingStation != null)
                     {
                         packagingStation.PackagerEmployeeSpeedMultiplier = 1;
-                        Mod.processedStationSpeeds.Remove(packagingStation);
                     }
                 }
             }
@@ -702,11 +679,7 @@ namespace ProduceMore
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
 				Mod.LoggerInstance.Warning($"Source: {e.Source}");
-				if (e.InnerException != null)
-				{
-					Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-					Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-				}
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
@@ -773,18 +746,13 @@ namespace ProduceMore
                     {
                         recipe.CookTime_Mins = Mod.originalRecipeTimes[recipe];
                     }
-                    Mod.processedRecipes.Remove(recipe);
                 }
             }
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
                 Mod.LoggerInstance.Warning($"Source: {e.Source}");
-                if (e.InnerException != null)
-                {
-                    Mod.LoggerInstance.Warning($"Inner exception: {e.InnerException.GetType().Name} - {e.InnerException.Message}");
-                    Mod.LoggerInstance.Warning($"Source: {e.InnerException.Source}");
-                }
+                Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
@@ -814,7 +782,8 @@ namespace ProduceMore
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
-            MelonLogger.Msg($"Transpiler for CashPatches started");
+            // Mod field isn't set yet by the time this executes, so use MelonLogger instead of Mod.LoggerInstance
+            //MelonLogger.Msg($"Transpiler for CashPatches started");
             //MelonLogger.Msg("Instruction dump:");
             //foreach (var instruction in instructions) { MelonLogger.Msg($"{instruction.opcode} {instruction.operand}"); }
 
@@ -830,13 +799,21 @@ namespace ProduceMore
                     ).ThrowIfNotMatch("Couldn't find ldc.r4 1000f")
                     .RemoveInstruction()
                     .InsertAndAdvance(
+                        // since GetCashStackLimit is a static void with no params, we can just call it
+                        // otherwise, we'd have to push this and/or params onto the stack first
                         new CodeInstruction(OpCodes.Call, getCashStackLimitInfo)
                     );
                 } 
             }
+            catch (InvalidOperationException e)
+            {
+                //MelonLogger.Msg("Replaced all \"Ldc.r4 1000f\" with calls to GetCashStackLimit()");
+            }
             catch (Exception e)
             {
-                MelonLogger.Msg("Replaced all \"Ldc.r4 1000f\" with calls to GetCashStackLimit()");
+                MelonLogger.Warning($"Failed to patch method: {e.GetType().Name} - {e.Message}");
+                MelonLogger.Warning($"Source: {e.Source}");
+                MelonLogger.Warning($"{e.StackTrace}");
             }
 
             IEnumerable<CodeInstruction> modifiedIL = matcher.InstructionEnumeration();
@@ -899,10 +876,6 @@ namespace ProduceMore
             int stackLimit = Mod.settings.GetStackLimit(EItemCategory.Cash);
 
             CashInstance cashInstance = CastTo<CashInstance>(__instance.draggedSlot.assignedSlot.ItemInstance);
-            if (cashInstance == null)
-            {
-                Mod.LoggerInstance.Warning($"Couldn't cast ItemInstance to CashInstance???");
-            }
             __instance.draggedCashAmount = Mathf.Min(cashInstance.Balance, stackLimit);
             __instance.draggedAmount = 1;
             if (GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick))
