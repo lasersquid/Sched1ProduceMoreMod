@@ -4,7 +4,7 @@ Configure stack sizes, station speed, and station capacity, all in one mod.
 
 Compatible with IL2CPP and Mono versions (main and alternate branches) of Schedule I.
 
-[Nexus Mods Page](https://www.nexusmods.com/schedule1/mods/!!!)
+[Nexus Mods Page](https://www.nexusmods.com/schedule1/mods/1028)
 
 [Thunderstore Page (Mono)](https://thunderstore.io/c/schedule-i/p/lasersquid/ProduceMoreMono/)
 
@@ -28,8 +28,7 @@ Compatible with IL2CPP and Mono versions (main and alternate branches) of Schedu
 
 
 ## Install instructions:
-FIXME: Add correct links once mod is posted
-* Vortex (from Nexus Mods) (RECOMMENDED): Open Vortex Mod Manager, then, in a browser, navigate to [mod page](https://www.nexusmods.com/schedule1/mods/!!!) and click "Vortex" download button, then select the appropriate version.
+* Vortex (from Nexus Mods) (RECOMMENDED): Open Vortex Mod Manager, then, in a browser, navigate to [mod page](https://www.nexusmods.com/schedule1/mods/1028) and click "Vortex" download button, then select the appropriate version.
 * Vortex (from DLL): Open Vortex Mod Manager, select game as Schedule I and click on "Mods" tab. Click "Install From File" button and navigate to appropriate dll.
 * Thunderstore/r2modman: Open Thunderstore/r2modman, select game, open or create a profile, then click "Get Mods", and search for "ProduceMore<IL2CPP/Mono>" by lasersquid. Or, navigate [here (mono)](https://thunderstore.io/c/schedule-i/p/lasersquid/ProduceMoreMono/) or [here (il2cpp)](https://thunderstore.io/c/schedule-i/p/lasersquid/ProduceMoreIL2CPP/), and click "Install with Mod Manager".
 * Manual: Copy net6/ProduceMoreIL2CPP.dll or netstandard21/ProduceMoreMono.dll from project bin/Debug directory to Schedule I's mods directory.
