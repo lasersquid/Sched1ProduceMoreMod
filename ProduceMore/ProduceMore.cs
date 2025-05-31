@@ -4,10 +4,16 @@ using UnityEngine;
 using System.Reflection.Emit;
 using MelonLoader;
 
+using Unity.Jobs.LowLevel.Unsafe;
+
+
+
 
 
 #if MONO_BUILD
 using FishNet;
+using ScheduleOne.DevUtilities;
+using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
@@ -17,10 +23,12 @@ using ScheduleOne.UI.Phone.Delivery;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
+using ScheduleOne.Variables;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
@@ -33,6 +41,7 @@ using Il2CppScheduleOne.UI.Shop;
 using Il2CppScheduleOne.UI.Stations.Drying_rack;
 using Il2CppScheduleOne.UI.Stations;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.Variables;
 using Il2CppScheduleOne;
 using Il2CppTMPro;
 #endif
@@ -59,6 +68,7 @@ namespace ProduceMore
                 return null;
             }
         }
+
         public static bool Is<T>(object o)
         {
             return o is T;
@@ -81,6 +91,8 @@ namespace ProduceMore
             throw new NotImplementedException();
         }
     }
+
+
     // Set stack sizes
     [HarmonyPatch]
     public class ItemCapacityPatches : Sched1PatchesBase
@@ -109,6 +121,11 @@ namespace ProduceMore
                 }
 
                 int stackLimit = Mod.settings.GetStackLimit(__instance);
+                // if lookup fails, just use stacklimit of 10
+                if (stackLimit == 0)
+                {
+                    stackLimit = 10;
+                }
                 __instance.Definition.StackLimit = stackLimit;
                 Mod.processedItemDefs.Add(__instance.Definition);
             }
@@ -402,6 +419,15 @@ namespace ProduceMore
             __result = __instance.GetMixQuantity() > 0 && __instance.OutputSlot.Quantity == 0;
         }
 
+        // actual call to GetMixQuantity seems to have been optimized out.
+        [HarmonyPatch(typeof(MixingStation), "IsMixingDone", MethodType.Getter)]
+        [HarmonyPostfix]
+        public static void IsMixingDonePostfix(MixingStation __instance, ref bool __result)
+        {
+            // re-insert original method body.
+            __result = __instance.CurrentMixOperation != null && __instance.CurrentMixTime >= __instance.GetMixTimeForCurrentOperation();
+        }
+
         // speed
         [HarmonyPatch(typeof(MixingStation), "GetMixTimeForCurrentOperation")]
         [HarmonyPrefix]
@@ -415,16 +441,18 @@ namespace ProduceMore
                     Mod.originalStationTimes["MixingStation"] = 15;
                 }
 
+                // TODO: check if it's even necessary to modify this field anymore
                 __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
+                Mod.processedStationSpeeds.Add(__instance);
             }
-            float mixTimePerItem = Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
+            float mixTimePerItem = (float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation");
 
             if (__instance.CurrentMixOperation == null)
             {
                 __result = 0;
                 return false;
             }
-            __result = (int)(mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity);
+            __result = (int)Mathf.Max((mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity), 0f);
 
             return false;
         }
@@ -442,6 +470,59 @@ namespace ProduceMore
                 __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
                 Mod.processedStationCapacities.Add(__instance.targetStation);
             }
+        }
+
+        // GetMixTimeForCurrentOperation seems to have been optimized out.
+        [HarmonyPatch(typeof(MixingStation), "MinPass")]
+        [HarmonyPrefix]
+        public static bool MinPassPrefix(MixingStation __instance)
+        {
+            if (__instance.CurrentMixOperation != null || __instance.OutputSlot.Quantity > 0)
+            {
+                int num = 0;
+                if (__instance.CurrentMixOperation != null)
+                {
+                    int currentMixTime = __instance.CurrentMixTime;
+                    int currentMixTime2 = __instance.CurrentMixTime;
+                    //__instance.CurrentMixTime = currentMixTime2 + 1;
+                    MethodInfo currentMixTimeSetter = AccessTools.PropertySetter(typeof(MixingStation), nameof(MixingStation.CurrentMixTime));
+                    currentMixTimeSetter.Invoke(__instance, [currentMixTime2 + 1]);
+                    num = __instance.GetMixTimeForCurrentOperation();
+                    if (__instance.CurrentMixTime >= num && currentMixTime < num && InstanceFinder.IsServer)
+                    {
+                        NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("Mixing_Operations_Completed", (NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("Mixing_Operations_Completed") + 1f).ToString(), true);
+                        __instance.MixingDone_Networked();
+                    }
+                }
+                if (__instance.Clock != null)
+                {
+                    __instance.Clock.SetScreenLit(true);
+                    __instance.Clock.DisplayMinutes(Mathf.Max(num - __instance.CurrentMixTime, 0));
+                }
+                if (__instance.Light != null)
+                {
+                    if (__instance.IsMixingDone)
+                    {
+                        __instance.Light.isOn = (NetworkSingleton<TimeManager>.Instance.DailyMinTotal % 2 == 0);
+                        return false;
+                    }
+                    __instance.Light.isOn = true;
+                    return false;
+                }
+            }
+            else
+            {
+                if (__instance.Clock != null)
+                {
+                    __instance.Clock.SetScreenLit(false);
+                    __instance.Clock.DisplayText(string.Empty);
+                }
+                if (__instance.Light != null && __instance.IsMixingDone)
+                {
+                    __instance.Light.isOn = false;
+                }
+            }
+            return false;
         }
 
 
@@ -540,58 +621,9 @@ namespace ProduceMore
 
 
         // speed
-        [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
-        [HarmonyPostfix]
-        public static void BeginCauldronPostfix(StartCauldronBehaviour __instance)
-        {
-            if (!Mod.originalStationTimes.ContainsKey("Cauldron"))
-            {
-                Mod.originalStationTimes["Cauldron"] = __instance.Station.CookTime;
-            }
-
-            int newCookTime = (int)((float)Mod.originalStationTimes["Cauldron"] / Mod.settings.GetStationSpeed("Cauldron"));
-            if (__instance.Station.RemainingCookTime > newCookTime)
-            {
-                __instance.Station.RemainingCookTime = newCookTime;
-            }
-        }
-
-
-        [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
-        [HarmonyPostfix]
-        public static void StartCookOperationPostfix(Cauldron __instance)
-        {
-            if (!Mod.originalStationTimes.ContainsKey("Cauldron"))
-            {
-                Mod.originalStationTimes["Cauldron"] = __instance.CookTime;
-            }
-
-            int newCookTime = (int)((float)Mod.originalStationTimes["Cauldron"] / Mod.settings.GetStationSpeed("Cauldron"));
-            __instance.RemainingCookTime = newCookTime;
-        }
-
-#if !MONO_BUILD
-
-        [HarmonyPatch(typeof(StartCauldronBehaviour), "BeginCauldron")]
-        [HarmonyPrefix]
-        public static void BeginCauldronPrefix(StartCauldronBehaviour __instance)
-        {
-            if (!Mod.originalStationTimes.ContainsKey("Cauldron"))
-            {
-                Mod.originalStationTimes["Cauldron"] = __instance.Station.CookTime;
-            }
-            if (!Mod.processedStationTimes.Contains(__instance.Station))
-            {
-                int newCookTime = (int)((float)Mod.originalStationTimes["Cauldron"] / Mod.settings.GetStationSpeed("Cauldron"));
-                __instance.Station.CookTime = newCookTime;
-                Mod.processedStationTimes.Add(__instance.Station);
-            }
-        }
-
-
         [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
         [HarmonyPrefix]
-        public static void StartCookOperationPrefix(Cauldron __instance)
+        public static void StartCookOperationPrefix(Cauldron __instance, ref int remainingCookTime)
         {
             if (!Mod.processedStationTimes.Contains(__instance))
             {
@@ -603,10 +635,10 @@ namespace ProduceMore
                 __instance.CookTime = newCookTime;
                 Mod.processedStationTimes.Add(__instance);
             }
+            remainingCookTime = (int)((float)Mod.originalStationTimes["Cauldron"] / Mod.settings.GetStationSpeed("Cauldron"));
         }
-#endif
 
-
+        // capacity takes care of itself
 
         public static new void RestoreDefaults()
         {
@@ -626,7 +658,6 @@ namespace ProduceMore
                         {
                             cauldron.CookTime = Mathf.Min(Mod.originalStationTimes["Cauldron"], cauldron.CookTime);
                             cauldron.RemainingCookTime = Mathf.Min(Mod.originalStationTimes["Cauldron"], cauldron.RemainingCookTime);
-
                         }
                     }
                 }
@@ -639,7 +670,6 @@ namespace ProduceMore
                 return;
             }
         }
-        // capacity takes care of itself
     }
 
 
@@ -771,6 +801,7 @@ namespace ProduceMore
         }
 
 
+        // Specify what methods the transpiler patch should apply to
         [HarmonyTargetMethods]
         public static IEnumerable<MethodBase> TargetMethods()
         {
@@ -779,6 +810,7 @@ namespace ProduceMore
 			yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "EndCashDrag");
         }
 
+        // Replace all instances of "1000" with our custom stacklimit
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
         {
@@ -787,27 +819,32 @@ namespace ProduceMore
             //MelonLogger.Msg("Instruction dump:");
             //foreach (var instruction in instructions) { MelonLogger.Msg($"{instruction.opcode} {instruction.operand}"); }
 
+            // Get GetCashStackLimit's methodinfo so we can call it with the "call" opcode
             MethodInfo getCashStackLimitInfo = AccessTools.Method(typeof(CashPatches), nameof(GetCashStackLimit));
 
+            // Locate instances of "ldc.r4 1000" and replace them with calls to GetCashStackLimit
             CodeMatcher matcher = new(instructions, generator);
             try
             {
                 while (true)
                 {
                     matcher.MatchEndForward(
-                        new CodeMatch(OpCodes.Ldc_R4, 1000f)
-                    ).ThrowIfNotMatch("Couldn't find ldc.r4 1000f")
+                        new CodeMatch(OpCodes.Ldc_R4, 1000)
+                    ).ThrowIfNotMatch("Couldn't find ldc.r4 1000") 
                     .RemoveInstruction()
                     .InsertAndAdvance(
-                        // since GetCashStackLimit is a static void with no params, we can just call it
+                        // since GetCashStackLimit is static with no params, we can just call it
                         // otherwise, we'd have to push this and/or params onto the stack first
                         new CodeInstruction(OpCodes.Call, getCashStackLimitInfo)
+                        // return value is stored on the stack, in the exact location that "ldc.r4 1000"
+                        // would have left it. no need to move it or balance the stack.
                     );
                 } 
             }
             catch (InvalidOperationException e)
             {
-                //MelonLogger.Msg("Replaced all \"Ldc.r4 1000f\" with calls to GetCashStackLimit()");
+                // this is the expected way to exit the loop
+                //MelonLogger.Msg("Replaced all \"Ldc.r4 1000\" with calls to GetCashStackLimit()");
             }
             catch (Exception e)
             {
@@ -826,6 +863,7 @@ namespace ProduceMore
 
 #else
 
+        // harmony transpilers only deal with IL, so we can't apply one to IL2CPP binary
         // This method has hardcoded constants, so we need to replace it entirely
         [HarmonyPatch(typeof(ItemUIManager), "UpdateCashDragAmount")]
         [HarmonyPrefix]

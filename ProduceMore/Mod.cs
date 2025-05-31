@@ -6,11 +6,15 @@ using System.Reflection;
 
 
 
+
+
 #if MONO_BUILD
+using ScheduleOne;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.StationFramework;
 #else
+using Il2CppScheduleOne;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.StationFramework;
@@ -18,7 +22,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.0", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.2", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -194,29 +198,88 @@ namespace ProduceMore
 					}
 				}
 
-				//Trim malformed entries
+
+				//Trim malformed entries and do bounds check
+				var categoriesToRemove = new List<EItemCategory>();
 				foreach (KeyValuePair<EItemCategory, int> entry in fromFile.stackSizes)
 				{
 					if (!defaultSettings.stackSizes.ContainsKey(entry.Key))
 					{
-						fromFile.stackSizes.Remove(entry.Key);
+						// can't change the entries of a list you're iterating over
+						//fromFile.stackSizes.Remove(entry.Key);
+						categoriesToRemove.Add(entry.Key);
+					}
+
+					if (entry.Value <= 0)
+					{
+						MelonLogger.Msg($"Settings file had stacklimit <= 0 for {entry.Key}, resetting to 1");
+						fromFile.stackSizes[entry.Key] = 1;
 					}
 				}
+				// there really should be a builtin for set subtraction, but whatevs.
+				foreach (EItemCategory category in categoriesToRemove)
+				{
+					fromFile.stackSizes.Remove(category);
+				}
 
+
+				var stringsToRemove = new List<string>();
 				foreach (KeyValuePair<string, float> entry in fromFile.stationSpeeds)
 				{
 					if (!defaultSettings.stationSpeeds.ContainsKey(entry.Key))
 					{
-						fromFile.stationSpeeds.Remove(entry.Key);
+						//fromFile.stationSpeeds.Remove(entry.Key);
+						stringsToRemove.Add(entry.Key);
+					}
+
+					if (entry.Value < float.MinValue)
+					{
+						MelonLogger.Msg($"Settings file had speed <= 0 for {entry.Key}, resetting to 0.0001");
+						fromFile.stationSpeeds[entry.Key] = 0.0001f;
 					}
 				}
+				foreach(string key in stringsToRemove)
+				{
+					fromFile.stationSpeeds.Remove(key);
+				}
 
+				stringsToRemove.Clear();
 				foreach (KeyValuePair<string, int> entry in fromFile.stationCapacities)
 				{
 					if (!defaultSettings.stationCapacities.ContainsKey(entry.Key))
 					{
-						fromFile.stationCapacities.Remove(entry.Key);
+						//fromFile.stationCapacities.Remove(entry.Key);
+						stringsToRemove.Add(entry.Key);
 					}
+
+					if (entry.Value <= 0)
+					{
+						MelonLogger.Msg($"Settings file had capacity <= 0 for {entry.Key}, resetting to 1");
+						fromFile.stationSpeeds[entry.Key] = 1;
+					}
+				}
+				foreach (string key in stringsToRemove)
+				{
+					fromFile.stationCapacities.Remove(key);
+				}
+
+				stringsToRemove.Clear();
+				foreach (KeyValuePair<string, int> entry in fromFile.stackOverrides)
+				{
+					if (!Registry.ItemExists(entry.Key) && !Registry.ItemExists(entry.Key.ToLower()))
+					{
+						stringsToRemove.Add(entry.Key);
+						MelonLogger.Msg($"Ignoring stack override that does not correspond to any known item: {entry.Key}");
+					}
+					if (entry.Value <= 0)
+					{
+						fromFile.stackOverrides[entry.Key] = 1;
+						MelonLogger.Msg($"Stack override for {entry.Key} <= 0; setting to 1");
+					}
+				}
+				foreach (string key in stringsToRemove)
+				{
+					fromFile.stackOverrides.Remove(key);
 				}
 
 				return fromFile;
@@ -272,6 +335,7 @@ namespace ProduceMore
 			stationCapacities.Add("MixingStation", 20);
 			stationCapacities.Add("PackagingStation", 20);
 		}
+
 		public int GetStackLimit(ItemInstance item)
 		{
 			int stackLimit = 10;
@@ -343,6 +407,7 @@ namespace ProduceMore
 			}
 			return stackLimit;
 		}
+
 		public int GetStackLimit(EItemCategory category)
 		{
 			int stackLimit = 10;
@@ -442,6 +507,8 @@ namespace ProduceMore
 
 
 // Bugs:
-//	- chemistry station multiplier re-applies if you load to menu and back - fixed
-//	- mixers finish instantly - fixed
-//	- mixer capturing original mix time as 3 - fixed
+// - mixers have hard cap of 1s per item -- fixed
+// - in multiplayer, guests can't start cauldrons until full original timer has elapsed -- needs testing
+// - no tag for storage -- beta problem
+// - mixers don't finish when time hits zero on high multiplier -- fixed
+// - packagers still limited by animation time -- might fix
