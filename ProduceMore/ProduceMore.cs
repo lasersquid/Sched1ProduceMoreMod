@@ -5,6 +5,11 @@ using System.Reflection.Emit;
 using MelonLoader;
 
 using Unity.Jobs.LowLevel.Unsafe;
+using System.Runtime.CompilerServices;
+using System.Collections;
+
+
+
 
 
 
@@ -13,6 +18,7 @@ using Unity.Jobs.LowLevel.Unsafe;
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.DevUtilities;
+using ScheduleOne.Employees;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.NPCs.Behaviour;
@@ -24,10 +30,12 @@ using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
 using ScheduleOne.Variables;
+using ScheduleOne;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Money;
@@ -162,6 +170,27 @@ namespace ProduceMore
             }
         }
 
+        // update item slots to report accurate capacity
+        [HarmonyPatch(typeof(ItemSlot), "GetCapacityForItem")]
+        [HarmonyPostfix]
+        public static void GetCapacityForItemPostfix(ItemSlot __instance, ref int __result, ItemInstance item)
+        {
+            if (!__instance.DoesItemMatchFilters(item))
+            {
+                __result = 0;
+                return;
+            }
+            if (__instance.ItemInstance == null || __instance.ItemInstance.CanStackWith(item, false))
+            {
+                //__result = item.StackLimit - __instance.Quantity;
+                __result = Mod.settings.GetStackLimit(item) - __instance.Quantity;
+                return;
+            }
+            __result = 0;
+            return;
+        }
+
+
 
         public static new void RestoreDefaults()
         {
@@ -193,6 +222,75 @@ namespace ProduceMore
         }
     }
 
+    // This patch requires its own class since we need a TargetMethod method to select
+    // the correct overload of GetItem. Regular Harmony annotations don't support this.
+    [HarmonyPatch]
+    public class RegistryPatches: Sched1PatchesBase
+    {
+        // GetItem has two definitions: ItemDefinition GetItem(string), and T GetItem<T>(string)
+        // TargetMethod required to select non-generic overload of GetItem
+        [HarmonyTargetMethod]
+        public static MethodBase TargetMethod()
+        {
+            // no convenience method to select by return type, so iterate instead
+            var methods = AccessTools.GetDeclaredMethods(typeof(Registry));
+            foreach (var method in methods)
+            {
+                if (method.Name == "GetItem")
+                {
+                    if (method.ReturnType == typeof(ItemDefinition))
+                    {
+                        return method;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        [HarmonyPatch]
+        [HarmonyPostfix]
+        public static void GetItemPostfix(ref ItemDefinition __result)
+        {
+            if (__result == null)
+            {
+                return;
+            }
+            if (!Mod.processedItemDefs.Contains(__result) && __result.Name.ToLower() != "cash")
+            {
+                // Speed Grow is classified as product for some reason
+                EItemCategory category;
+                if (__result.Name == "Speed Grow")
+                {
+                    category = EItemCategory.Growing;
+                }
+                else
+                {
+                    category = __result.Category;
+                }
+
+                if (!Mod.originalStackLimits.ContainsKey(category))
+                {
+                    Mod.originalStackLimits[category] = __result.StackLimit; 
+                }
+
+                int stackLimit = Mod.settings.GetStackLimit(__result);
+                // if lookup fails, just use stacklimit of 10
+                if (stackLimit == 0)
+                {
+                    stackLimit = 10;
+                }
+                __result.StackLimit = stackLimit;
+                Mod.processedItemDefs.Add(__result);
+            }
+        }
+
+        public static new void RestoreDefaults()
+        {
+            // modifications reverted by ItemCapacityPatches.RestoreDefaults
+        }
+
+    }
 
     // Patch drying rack capacity and speed
     [HarmonyPatch]
@@ -362,8 +460,6 @@ namespace ProduceMore
             __result = (int)((float)Mod.originalStationTimes["LabOven"] / Mod.settings.GetStationSpeed("LabOven"));
         }
 
-#if !MONO_BUILD
-
         // call to GetCookDuration seems to have been optimized out.
         [HarmonyPatch(typeof(OvenCookOperation), "IsReady")]
         [HarmonyPostfix]
@@ -372,7 +468,37 @@ namespace ProduceMore
             // Re-insert original method body.
             __result = __instance.CookProgress >= __instance.GetCookDuration();
         }
-#endif
+
+        // allow player to start new cookoperation as long as output has space
+        [HarmonyPatch(typeof(LabOvenCanvas), "DoesOvenOutputHaveSpace")]
+        [HarmonyPostfix]
+        public static void DoesOvenOutputHaveSpacePostfix(LabOvenCanvas __instance, ref bool __result)
+        {
+            ItemInstance productInstance = __instance.Oven.CurrentOperation.Product.GetDefaultInstance(1);
+            ItemInstance outputInstance = __instance.Oven.OutputSlot.ItemInstance;
+            int capacity = 0;
+
+            // for some reason calling getcapacity here doesn't result in our postfix running
+            // parent function might be overridden in child classes maybe?
+            // for now just inline body of getcapacity
+            // TODO: clean this up
+            if (!__instance.Oven.OutputSlot.DoesItemMatchFilters(productInstance))
+            {
+                capacity = 0;
+            }
+            else if (outputInstance == null)
+            {
+                capacity = Mod.settings.GetStackLimit(productInstance);
+            }
+            else if (productInstance.CanStackWith(outputInstance.Definition.GetDefaultInstance(1), false))
+            {
+                capacity = Mod.settings.GetStackLimit(productInstance) - outputInstance.Quantity;
+            }
+
+            int quantityProduced = __instance.Oven.CurrentOperation.Cookable.ProductQuantity;
+            __result = capacity >= quantityProduced;
+
+        }
 
         public static new void RestoreDefaults()
         {
@@ -435,17 +561,41 @@ namespace ProduceMore
         {
             if (!Mod.processedStationSpeeds.Contains(__instance))
             {
-                if (!Mod.originalStationTimes.ContainsKey("MixingStation"))
+                if (Is<MixingStationMk2>(__instance))
                 {
-                    // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
-                    Mod.originalStationTimes["MixingStation"] = 15;
+                    if (!Mod.originalStationTimes.ContainsKey("MixingStationMk2"))
+                    {
+                        // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
+                        Mod.originalStationTimes["MixingStationMk2"] = 3;
+                        __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStationMk2"] / Mod.settings.GetStationSpeed("MixingStationMk2"), 1f);
+                    }
+
+                }
+                else
+                {
+                    if (!Mod.originalStationTimes.ContainsKey("MixingStation"))
+                    {
+                        // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
+                        Mod.originalStationTimes["MixingStation"] = 15;
+                        __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
+                    }
+
                 }
 
                 // TODO: check if it's even necessary to modify this field anymore
-                __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
                 Mod.processedStationSpeeds.Add(__instance);
             }
-            float mixTimePerItem = (float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation");
+
+            int originalStationTime;
+            if (Is<MixingStationMk2>(__instance))
+            {
+                originalStationTime = Mod.originalStationTimes["MixingStationMk2"];
+            }
+            else
+            {
+                originalStationTime = Mod.originalStationTimes["MixingStation"];
+            }
+            float mixTimePerItem = (float)originalStationTime / Mod.settings.GetStationSpeed("MixingStation");
 
             if (__instance.CurrentMixOperation == null)
             {
@@ -535,13 +685,28 @@ namespace ProduceMore
                     MixingStation mixingStation = CastTo<MixingStation>(station);
                     if (mixingStation != null)
                     {
-                        if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                        if (Is<MixingStationMk2>(mixingStation))
                         {
-                            mixingStation.MaxMixQuantity = 20;
+                            if (!Mod.originalStationCapacities.ContainsKey("MixingStationMk2"))
+                            {
+                                mixingStation.MaxMixQuantity = 20;
+                            }
+                            else
+                            {
+                                mixingStation.MaxMixQuantity = Mod.originalStationCapacities["MixingStationMk2"];
+                            }
+                            
                         }
                         else
                         {
-                            mixingStation.MaxMixQuantity = Mod.originalStationCapacities["MixingStation"];
+                            if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                            {
+                                mixingStation.MaxMixQuantity = 10;
+                            }
+                            else
+                            {
+                                mixingStation.MaxMixQuantity = Mod.originalStationCapacities["MixingStation"];
+                            }
                         }
                     }
                 }
@@ -551,13 +716,28 @@ namespace ProduceMore
                     MixingStation mixingStation = CastTo<MixingStation>(station);
                     if (Mod.processedStationTimes.Contains(station))
                     {
-                        if (!Mod.originalStationTimes.ContainsKey("MixingStation"))
+                        if (Is<MixingStationMk2>(mixingStation))
                         {
-                            mixingStation.MixTimePerItem = 15;
+                            if (!Mod.originalStationTimes.ContainsKey("MixingStationMk2"))
+                            {
+                                mixingStation.MixTimePerItem = 3;
+                            }
+                            else
+                            {
+                                mixingStation.MixTimePerItem = Mod.originalStationTimes["MixingStationMk2"];
+                            }
+
                         }
                         else
                         {
-                            mixingStation.MixTimePerItem = Mod.originalStationTimes["MixingStation"];
+                            if (!Mod.originalStationTimes.ContainsKey("MixingStation"))
+                            {
+                                mixingStation.MixTimePerItem = 15;
+                            }
+                            else
+                            {
+                                mixingStation.MixTimePerItem = Mod.originalStationTimes["MixingStation"];
+                            }
                         }
                     }
                 }
@@ -638,6 +818,38 @@ namespace ProduceMore
             remainingCookTime = (int)((float)Mod.originalStationTimes["Cauldron"] / Mod.settings.GetStationSpeed("Cauldron"));
         }
 
+        // accurately calculate output space instead of assuming limit of 10
+        [HarmonyPatch(typeof(Cauldron), "HasOutputSpace")]
+        [HarmonyPostfix]
+        public static void HasOutputSpacePostfix(Cauldron __instance, ref bool __result)
+        {
+            __result = Mod.settings.GetStackLimit(__instance.CocaineBaseDefinition) >= 10;
+        }
+
+        // call to HasOutputSpace seems to have been optimized out.
+        [HarmonyPatch(typeof(Cauldron), "GetState")]
+        [HarmonyPostfix]
+        public static void GetStatePostfix(Cauldron __instance, ref Cauldron.EState __result)
+        {
+            // re-insert original method body.
+            if (__instance.isCooking)
+            {
+                __result = Cauldron.EState.Cooking;
+            }
+            else if (!__instance.HasIngredients())
+            {
+                __result = Cauldron.EState.MissingIngredients;
+            }
+            else if (!__instance.HasOutputSpace())
+            {
+                __result = Cauldron.EState.OutputFull;
+            }
+            else
+            {
+                __result = Cauldron.EState.Ready;
+            }
+        }
+
         // capacity takes care of itself
 
         public static new void RestoreDefaults()
@@ -689,8 +901,54 @@ namespace ProduceMore
                 Mod.processedStationSpeeds.Add(__instance.Station);
             }
         }
-        // capacity takes care of itself
 
+        // patch packaging coroutine to reduce animation time
+        [HarmonyPatch(typeof(PackagingStationBehaviour), "RpcLogic___BeginPackaging_2166136261")]
+        [HarmonyPrefix]
+        public static bool RpcLogic_BeginPackagingPrefix(PackagingStationBehaviour __instance)
+        {
+            if (__instance.PackagingInProgress || __instance.Station == null)
+            {
+                return false;
+            }
+            //__instance.PackagingInProgress = true;
+            MethodInfo packagingInProgressSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress");
+            packagingInProgressSetter.Invoke(__instance, [true]);
+            __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f / Mod.settings.GetStationSpeed("PackagingStation"));
+            //__instance.packagingRoutine = __instance.StartCoroutine(BeginPackagingCoroutine());
+            MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
+            object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
+            packagingRoutineSetter.Invoke(__instance, [(Coroutine)packagingCoroutine]);
+
+            return false;
+        }
+
+        private static IEnumerator BeginPackagingCoroutine(PackagingStationBehaviour behaviour)
+        {
+            yield return new WaitForEndOfFrame();
+            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", true);
+            float packageTime = 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier);
+            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            {
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
+                yield return new WaitForEndOfFrame();
+            }
+            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            if (InstanceFinder.IsServer)
+            {
+                behaviour.Station.PackSingleInstance();
+            }
+            //behaviour.PackagingInProgress = false;
+            //behaviour.packagingRoutine = null;
+            MethodInfo packagingInProgressSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress");
+            MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
+            packagingInProgressSetter.Invoke(behaviour, [false]);
+            packagingRoutineSetter.Invoke(behaviour, [null]);
+            yield break;
+
+        }
+
+        // capacity takes care of itself
 
         public static new void RestoreDefaults()
         {

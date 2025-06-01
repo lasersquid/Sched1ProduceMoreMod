@@ -66,6 +66,7 @@ namespace ProduceMore
 		public override void OnInitializeMelon()
 		{
 			LoadSettings();
+			SaveSettings();
 			SetMod();
 			LoggerInstance.Msg("Initialized.");
 		}
@@ -198,9 +199,18 @@ namespace ProduceMore
 					}
 				}
 
+                foreach(KeyValuePair<string, int> entry in defaultSettings.stackOverrides)
 
-				//Trim malformed entries and do bounds check
-				var categoriesToRemove = new List<EItemCategory>();
+                {
+                    if (!fromFile.stackOverrides.ContainsKey(entry.Key))
+                    {
+                        fromFile.stackOverrides.Add(entry.Key, entry.Value);
+                    }
+                }
+
+
+                //Trim malformed entries and do bounds checking
+                var categoriesToRemove = new List<EItemCategory>();
 				foreach (KeyValuePair<EItemCategory, int> entry in fromFile.stackSizes)
 				{
 					if (!defaultSettings.stackSizes.ContainsKey(entry.Key))
@@ -266,11 +276,12 @@ namespace ProduceMore
 				stringsToRemove.Clear();
 				foreach (KeyValuePair<string, int> entry in fromFile.stackOverrides)
 				{
-					if (!Registry.ItemExists(entry.Key) && !Registry.ItemExists(entry.Key.ToLower()))
-					{
-						stringsToRemove.Add(entry.Key);
-						MelonLogger.Msg($"Ignoring stack override that does not correspond to any known item: {entry.Key}");
-					}
+					// have to do this validation after scene loads, since registry is not loaded at settings load time
+					//if (!Registry.ItemExists(entry.Key) && !Registry.ItemExists(entry.Key.ToLower()))
+					//{
+					//	stringsToRemove.Add(entry.Key);
+					//	MelonLogger.Msg($"Ignoring stack override that does not correspond to any known item: {entry.Key}");
+					//}
 					if (entry.Value <= 0)
 					{
 						fromFile.stackOverrides[entry.Key] = 1;
@@ -334,6 +345,13 @@ namespace ProduceMore
 			stationCapacities.Add("DryingRack", 20);
 			stationCapacities.Add("MixingStation", 20);
 			stationCapacities.Add("PackagingStation", 20);
+
+			// Default stack overrides
+			stackOverrides.Add("Acid", 10);
+			stackOverrides.Add("Phosphorus", 10);
+			stackOverrides.Add("Low-Quality Pseudo", 10);
+			stackOverrides.Add("Pseudo", 10);
+			stackOverrides.Add("High-Quality Pseudo", 10);
 		}
 
 		public int GetStackLimit(ItemInstance item)
@@ -477,8 +495,10 @@ namespace ProduceMore
 // phone app for configuration - next ver
 // support for changing settings on the fly - backend logic ready; still needs interface to test (next ver)
 // injecting into savefile - next ver
-// configurable via mod manager app -- incompatible with savefile injection?
-// separate mixingstation mk1 and mk2 - soon
+// configurable via mod manager app
+// separate mixingstation mk1 and mk2 - done
+// speed up drying rack animation
+// speed up cauldron animation
 
 
 // Testing:
@@ -511,4 +531,10 @@ namespace ProduceMore
 // - in multiplayer, guests can't start cauldrons until full original timer has elapsed -- needs testing
 // - no tag for storage -- beta problem
 // - mixers don't finish when time hits zero on high multiplier -- fixed
-// - packagers still limited by animation time -- might fix
+// - packagers still limited by animation time -- fixed, mostly. they're a lot faster now.
+// - mixing station mk2 limited to mk1 speeds -- fixed
+// - acid, pseudo, and phosphorous have default stacklimit of 20 -- fixed; should probably overhaul original item limit registration
+// - laboven doesn't let you start a batch if any product is in the output -- fixed
+// - cauldron doesn't let you start a batch if any product is in the output -- fixed
+
+
