@@ -413,6 +413,55 @@ namespace ProduceMore
             return false;
         }
 
+
+        // speed up employees hanging up leaves
+        [HarmonyPatch(typeof(StartDryingRackBehaviour), "RpcLogic___BeginAction_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_BeginActionPrefix(StartDryingRackBehaviour __instance)
+        {
+            if (__instance.WorkInProgress)
+            {
+                return false;
+            }
+            if (__instance.Rack == null)
+            {
+                return false;
+            }
+
+            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress");
+            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine");
+
+            workInProgressSetter.Invoke(__instance, [true]);
+            __instance.Npc.Movement.FacePoint(__instance.Rack.uiPoint.position, 0.5f);
+            Coroutine workCoroutine = (Coroutine)MelonCoroutines.Start(BeginActionCoroutine(__instance));
+            workRoutineSetter.Invoke(__instance, [workCoroutine]);
+            return false;
+        }
+
+        // Replacement coroutine for BeginAction
+        public static IEnumerator BeginActionCoroutine(StartDryingRackBehaviour behaviour)
+        {
+            yield return new WaitForEndOfFrame();
+            behaviour.Rack.InputSlot.ItemInstance.GetCopy(1);
+            int itemCount = 0;
+            while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
+            {
+                behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
+                yield return new WaitForSeconds(1f / Mod.settings.GetStationSpeed("DryingRack"));
+                int num = itemCount;
+                itemCount = num + 1;
+            }
+            if (InstanceFinder.IsServer)
+            {
+                behaviour.Rack.StartOperation();
+            }
+            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress");
+            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine");
+            workInProgressSetter.Invoke(behaviour, [false]);
+            workRoutineSetter.Invoke(behaviour, [null]);
+            yield break;
+        }
+
         public static new void RestoreDefaults()
         {
             try
@@ -917,8 +966,8 @@ namespace ProduceMore
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f / Mod.settings.GetStationSpeed("PackagingStation"));
             //__instance.packagingRoutine = __instance.StartCoroutine(BeginPackagingCoroutine());
             MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
-            object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
-            packagingRoutineSetter.Invoke(__instance, [(Coroutine)packagingCoroutine]);
+            Coroutine packagingCoroutine = (Coroutine)MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
+            packagingRoutineSetter.Invoke(__instance, [packagingCoroutine]);
 
             return false;
         }
