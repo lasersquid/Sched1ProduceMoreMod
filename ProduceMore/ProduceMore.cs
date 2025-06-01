@@ -609,7 +609,7 @@ namespace ProduceMore
             EQuality ingredientQuality = EQuality.Standard;
             if (itemInstance is QualityItemInstance)
             {
-                ingredientQuality = (itemInstance as QualityItemInstance).Quality;
+                ingredientQuality = (CastTo<QualityItemInstance>(itemInstance)).Quality;
             }
             behaviour.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, id));
             stopCook.Invoke(behaviour, []);
@@ -854,6 +854,72 @@ namespace ProduceMore
             return false;
         }
 
+
+        [HarmonyPatch(typeof(StartMixingStationBehaviour), "RpcLogic___StartCook_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_StartCookPrefix(StartMixingStationBehaviour __instance)
+        {
+            MethodInfo startRoutineGetter = AccessTools.PropertyGetter(typeof(StartMixingStationBehaviour), "startRoutine");
+            MethodInfo startRoutineSetter = AccessTools.PropertySetter(typeof(StartMixingStationBehaviour), "startRoutine");
+            if (startRoutineGetter.Invoke(__instance, []) != null)
+            {
+                return false;
+            }
+            if (__instance.targetStation == null)
+            {
+                return false;
+            }
+            object workRoutine = MelonCoroutines.Start(StartMixCoroutine(__instance));
+            startRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+
+            return false;
+        }
+
+        private static IEnumerator StartMixCoroutine(StartMixingStationBehaviour behaviour)
+        {
+            float stationSpeed;
+            if (Is<MixingStationMk2>(behaviour.targetStation))
+            {
+                stationSpeed = Mod.settings.GetStationSpeed("MixingStationMk2");
+            }
+            else
+            {
+                stationSpeed = Mod.settings.GetStationSpeed("MixingStation");
+            }
+
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
+            yield return new WaitForSeconds(0.5f);
+
+            MethodInfo canCookStart = AccessTools.Method(typeof(StartMixingStationBehaviour), "CanCookStart");
+            MethodInfo stopCook = AccessTools.Method(typeof(StartMixingStationBehaviour), "StopCook");
+            if (!(bool)canCookStart.Invoke(behaviour, []))
+            {
+                stopCook.Invoke(behaviour, []);
+                behaviour.End_Networked(null);
+                yield break;
+            }
+            behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
+            behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
+            QualityItemInstance product = CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
+            ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
+            int mixQuantity = behaviour.targetStation.GetMixQuantity();
+            int num;
+            for (int i = 0; i < mixQuantity; i = num + 1)
+            {
+                yield return new WaitForSeconds(1f / stationSpeed);
+                num = i;
+            }
+            if (InstanceFinder.IsServer)
+            {
+                behaviour.targetStation.ProductSlot.ChangeQuantity(-mixQuantity, false);
+                behaviour.targetStation.MixerSlot.ChangeQuantity(-mixQuantity, false);
+                MixOperation operation = new MixOperation(product.ID, product.Quality, mixer.ID, mixQuantity);
+                behaviour.targetStation.SendMixingOperation(operation, 0);
+            }
+            stopCook.Invoke(behaviour, []);
+            behaviour.End_Networked(null);
+            yield break;
+        }
 
         public static new void RestoreDefaults()
         {
