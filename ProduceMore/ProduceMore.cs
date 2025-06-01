@@ -433,13 +433,13 @@ namespace ProduceMore
 
             workInProgressSetter.Invoke(__instance, [true]);
             __instance.Npc.Movement.FacePoint(__instance.Rack.uiPoint.position, 0.5f);
-            Coroutine workCoroutine = (Coroutine)MelonCoroutines.Start(BeginActionCoroutine(__instance));
-            workRoutineSetter.Invoke(__instance, [workCoroutine]);
+            object workCoroutine = MelonCoroutines.Start(BeginActionCoroutine(__instance));
+            workRoutineSetter.Invoke(__instance, [(Coroutine)workCoroutine]);
             return false;
         }
 
         // Replacement coroutine for BeginAction
-        public static IEnumerator BeginActionCoroutine(StartDryingRackBehaviour behaviour)
+        private static IEnumerator BeginActionCoroutine(StartDryingRackBehaviour behaviour)
         {
             yield return new WaitForEndOfFrame();
             behaviour.Rack.InputSlot.ItemInstance.GetCopy(1);
@@ -881,7 +881,8 @@ namespace ProduceMore
         public static void GetStatePostfix(Cauldron __instance, ref Cauldron.EState __result)
         {
             // re-insert original method body.
-            if (__instance.isCooking)
+            MethodInfo isCookingGetter = AccessTools.PropertyGetter(typeof(Cauldron), "isCooking");
+            if ((bool)isCookingGetter.Invoke(__instance, []))
             {
                 __result = Cauldron.EState.Cooking;
             }
@@ -897,6 +898,55 @@ namespace ProduceMore
             {
                 __result = Cauldron.EState.Ready;
             }
+        }
+
+        // Override cauldron work routine to accelerate animation
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "RpcLogic___BeginCauldron_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_BeginCauldronPrefix(StartCauldronBehaviour __instance)
+        {
+            if (__instance.WorkInProgress)
+            {
+                return false;
+            }
+            if (__instance.Station == null)
+            {
+                return false;
+            }
+            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress");
+            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine");
+
+            workInProgressSetter.Invoke(__instance, [true]);
+            __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f);
+            object workCoroutine = MelonCoroutines.Start(BeginCauldronCoroutine(__instance));
+            workRoutineSetter.Invoke(__instance, [(Coroutine)workCoroutine]);
+            return false;
+        }
+
+
+        // coroutine with reduced animation times
+        private static IEnumerator BeginCauldronCoroutine(StartCauldronBehaviour behaviour)
+        {
+            yield return new WaitForEndOfFrame();
+            behaviour.Npc.Avatar.Anim.SetBool("UseChemistryStation", true);
+            float packageTime = 15f / Mod.settings.GetStationSpeed("Cauldron");
+            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            {
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.LinkOrigin.position, 0, false);
+                yield return new WaitForEndOfFrame();
+            }
+            behaviour.Npc.Avatar.Anim.SetBool("UseChemistryStation", false);
+            if (InstanceFinder.IsServer)
+            {
+                EQuality quality = behaviour.Station.RemoveIngredients();
+                behaviour.Station.StartCookOperation(null, behaviour.Station.CookTime, quality);
+            }
+            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress");
+            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine");
+            workInProgressSetter.Invoke(behaviour, [false]);
+            workRoutineSetter.Invoke(behaviour, [null]);
+
+            yield break;
         }
 
         // capacity takes care of itself
@@ -960,18 +1010,17 @@ namespace ProduceMore
             {
                 return false;
             }
-            //__instance.PackagingInProgress = true;
             MethodInfo packagingInProgressSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress");
             packagingInProgressSetter.Invoke(__instance, [true]);
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f / Mod.settings.GetStationSpeed("PackagingStation"));
-            //__instance.packagingRoutine = __instance.StartCoroutine(BeginPackagingCoroutine());
             MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
-            Coroutine packagingCoroutine = (Coroutine)MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
-            packagingRoutineSetter.Invoke(__instance, [packagingCoroutine]);
+            object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
+            packagingRoutineSetter.Invoke(__instance, [(Coroutine)packagingCoroutine]);
 
             return false;
         }
 
+        // replacement coroutine to accelerate animation
         private static IEnumerator BeginPackagingCoroutine(PackagingStationBehaviour behaviour)
         {
             yield return new WaitForEndOfFrame();

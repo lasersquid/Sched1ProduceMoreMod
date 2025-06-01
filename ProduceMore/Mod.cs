@@ -497,7 +497,7 @@ namespace ProduceMore
 // injecting into savefile - next ver
 // configurable via mod manager app
 // separate mixingstation mk1 and mk2 - done
-// speed up drying rack animation
+// speed up drying rack animation - done
 // speed up cauldron animation
 
 
