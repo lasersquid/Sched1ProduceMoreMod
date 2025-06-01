@@ -98,6 +98,9 @@
 	  <Reference Include="UnityEngine.CoreModule">
 	    <HintPath>mono_libs\UnityEngine.CoreModule.dll</HintPath>
 	  </Reference>
+	  <Reference Include="UnityEngine.PhysicsModule">
+	    <HintPath>mono_libs\UnityEngine.PhysicsModule.dll</HintPath>
+	  </Reference>
 	  <Reference Include="UnityEngine.UIModule">
 	    <HintPath>mono_libs\UnityEngine.UIModule.dll</HintPath>
 	  </Reference>

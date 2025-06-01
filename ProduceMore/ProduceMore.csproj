@@ -91,6 +91,9 @@
 		<Reference Include="UnityEngine.CoreModule">
 			<HintPath>il2cpp_libs\UnityEngine.CoreModule.dll</HintPath>
 		</Reference>
+		<Reference Include="UnityEngine.PhysicsModule">
+		  <HintPath>il2cpp_libs\UnityEngine.PhysicsModule.dll</HintPath>
+		</Reference>
 		<Reference Include="UnityEngine.UIModule">
 		  <HintPath>il2cpp_libs\UnityEngine.UIModule.dll</HintPath>
 		</Reference>

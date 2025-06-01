@@ -548,6 +548,136 @@ namespace ProduceMore
             __result = capacity >= quantityProduced;
 
         }
+        
+        // Call our own startcook coroutine with accelerated animations
+        [HarmonyPatch(typeof(StartLabOvenBehaviour), "RpcLogic___StartCook_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_StartCookPrefix(StartLabOvenBehaviour __instance)
+        {
+            MethodInfo cookRoutineGetter = AccessTools.PropertyGetter(typeof(StartLabOvenBehaviour), "cookRoutine");
+            if (cookRoutineGetter.Invoke(__instance, []) != null)
+            {
+                return false;
+            }
+            if (__instance.targetOven == null)
+            {
+                return false;
+            }
+            MethodInfo cookRoutineSetter = AccessTools.PropertySetter(typeof(StartLabOvenBehaviour), "cookRoutine");
+            object workRoutine = MelonCoroutines.Start(StartCookCoroutine(__instance));
+            cookRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+
+            return false;
+        }
+
+        // Startcook coroutine with accelerated animations
+        private static IEnumerator StartCookCoroutine(StartLabOvenBehaviour behaviour)
+        {
+
+            float stationSpeed = Mod.settings.GetStationSpeed("LabOven");
+            behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
+            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
+            yield return new WaitForSeconds(0.5f / stationSpeed);
+            MethodInfo canCookStart = AccessTools.Method(typeof(StartLabOvenBehaviour), "CanCookStart");
+            MethodInfo stopCook = AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook");
+            if (!(bool)canCookStart.Invoke(behaviour, []))
+            {
+                stopCook.Invoke(behaviour, []);
+                behaviour.End_Networked(null);
+                yield break;
+            }
+            behaviour.targetOven.Door.SetPosition(1f / stationSpeed);
+            yield return new WaitForSeconds(0.5f / stationSpeed);
+            behaviour.targetOven.WireTray.SetPosition(1f / stationSpeed);
+            yield return new WaitForSeconds(5f / stationSpeed);
+            behaviour.targetOven.Door.SetPosition(0f);
+            yield return new WaitForSeconds(1f / stationSpeed);
+            ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
+            if (itemInstance == null)
+            {
+                stopCook.Invoke(behaviour, []);
+                behaviour.End_Networked(null);
+                yield break;
+            }
+            int num = 1;
+            if ((CastTo<StorableItemDefinition>(itemInstance.Definition)).StationItem.GetModule<CookableModule>().CookType == CookableModule.ECookableType.Solid)
+            {
+                num = Mathf.Min(behaviour.targetOven.IngredientSlot.Quantity, 10);
+            }
+            itemInstance.ChangeQuantity(-num);
+            string id = (CastTo<StorableItemDefinition>(itemInstance.Definition)).StationItem.GetModule<CookableModule>().Product.ID;
+            EQuality ingredientQuality = EQuality.Standard;
+            if (itemInstance is QualityItemInstance)
+            {
+                ingredientQuality = (itemInstance as QualityItemInstance).Quality;
+            }
+            behaviour.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, id));
+            stopCook.Invoke(behaviour, []);
+            behaviour.End_Networked(null);
+            yield break;
+        }
+
+
+
+        // Call our own finishcook coroutine with accelerated animations
+        [HarmonyPatch(typeof(FinishLabOvenBehaviour), "RpcLogic___StartAction_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_StartFinishCookPrefix(FinishLabOvenBehaviour __instance)
+        {
+            MethodInfo actionRoutineGetter = AccessTools.PropertyGetter(typeof(FinishLabOvenBehaviour), "actionRoutine");
+            MethodInfo actionRoutineSetter = AccessTools.PropertySetter(typeof(FinishLabOvenBehaviour), "actionRoutine");
+            if (actionRoutineGetter.Invoke(__instance, []) != null)
+            {
+                return false;
+            }
+            if (__instance.targetOven == null)
+            {
+                return false;
+            }
+            object workRoutine = MelonCoroutines.Start(FinishCookCoroutine(__instance));
+            actionRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+
+            return false;
+        }
+
+        // FinishCook coroutine with accelerated animations
+        private static IEnumerator FinishCookCoroutine(FinishLabOvenBehaviour behaviour)
+        {
+            float stationSpeed = Mod.settings.GetStationSpeed("LabOven");
+            behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
+            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
+            yield return new WaitForSeconds(0.5f);
+
+            MethodInfo canActionStart = AccessTools.Method(typeof(FinishLabOvenBehaviour), "CanActionStart");
+            MethodInfo stopAction = AccessTools.Method(typeof(FinishLabOvenBehaviour), "StopAction");
+            if (!(bool)canActionStart.Invoke(behaviour, []))
+            {
+                stopAction.Invoke(behaviour, []);
+                behaviour.End_Networked(null);
+                yield break;
+            }
+            behaviour.Npc.SetEquippable_Networked(null, "Avatar/Equippables/Hammer");
+            behaviour.targetOven.Door.SetPosition(1f / stationSpeed);
+            behaviour.targetOven.WireTray.SetPosition(1f / stationSpeed);
+            yield return new WaitForSeconds(0.5f / stationSpeed);
+            behaviour.targetOven.SquareTray.SetParent(behaviour.targetOven.transform);
+            behaviour.targetOven.RemoveTrayAnimation.Play();
+            yield return new WaitForSeconds(0.1f);
+            behaviour.targetOven.Door.SetPosition(0f);
+            yield return new WaitForSeconds(1f / stationSpeed);
+            behaviour.Npc.SetAnimationBool_Networked(null, "UseHammer", true);
+            yield return new WaitForSeconds(10f / stationSpeed);
+            behaviour.Npc.SetAnimationBool_Networked(null, "UseHammer", false);
+            behaviour.targetOven.Shatter(behaviour.targetOven.CurrentOperation.Cookable.ProductQuantity, behaviour.targetOven.CurrentOperation.Cookable.ProductShardPrefab.gameObject);
+            yield return new WaitForSeconds(1f / stationSpeed);
+            ItemInstance productItem = behaviour.targetOven.CurrentOperation.GetProductItem(behaviour.targetOven.CurrentOperation.Cookable.ProductQuantity * behaviour.targetOven.CurrentOperation.IngredientQuantity);
+            behaviour.targetOven.OutputSlot.AddItem(productItem, false);
+            behaviour.targetOven.SendCookOperation(null);
+            stopAction.Invoke(behaviour, []);
+            behaviour.End_Networked(null);
+            yield break;
+        }
+
 
         public static new void RestoreDefaults()
         {
