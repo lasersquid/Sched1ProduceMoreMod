@@ -15,8 +15,11 @@ using System.Collections;
 
 
 
+
+
 #if MONO_BUILD
 using FishNet;
+using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Employees;
 using ScheduleOne.GameTime;
@@ -34,6 +37,8 @@ using ScheduleOne;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.GameTime;
@@ -428,13 +433,10 @@ namespace ProduceMore
                 return false;
             }
 
-            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress");
-            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine");
-
-            workInProgressSetter.Invoke(__instance, [true]);
+            AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress").Invoke(__instance, [true]);
             __instance.Npc.Movement.FacePoint(__instance.Rack.uiPoint.position, 0.5f);
             object workCoroutine = MelonCoroutines.Start(BeginActionCoroutine(__instance));
-            workRoutineSetter.Invoke(__instance, [(Coroutine)workCoroutine]);
+            AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine").Invoke(__instance, [(Coroutine)workCoroutine]);
             return false;
         }
 
@@ -455,10 +457,8 @@ namespace ProduceMore
             {
                 behaviour.Rack.StartOperation();
             }
-            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress");
-            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine");
-            workInProgressSetter.Invoke(behaviour, [false]);
-            workRoutineSetter.Invoke(behaviour, [null]);
+            AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress").Invoke(behaviour, [false]);
+            AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "workRoutine").Invoke(behaviour, [null]);
             yield break;
         }
 
@@ -554,8 +554,8 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartLabOvenBehaviour __instance)
         {
-            MethodInfo cookRoutineGetter = AccessTools.PropertyGetter(typeof(StartLabOvenBehaviour), "cookRoutine");
-            if (cookRoutineGetter.Invoke(__instance, []) != null)
+            
+            if (AccessTools.PropertyGetter(typeof(StartLabOvenBehaviour), "cookRoutine").Invoke(__instance, []) != null)
             {
                 return false;
             }
@@ -563,9 +563,8 @@ namespace ProduceMore
             {
                 return false;
             }
-            MethodInfo cookRoutineSetter = AccessTools.PropertySetter(typeof(StartLabOvenBehaviour), "cookRoutine");
             object workRoutine = MelonCoroutines.Start(StartCookCoroutine(__instance));
-            cookRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+            AccessTools.PropertySetter(typeof(StartLabOvenBehaviour), "cookRoutine").Invoke(__instance, [(Coroutine)workRoutine]);
 
             return false;
         }
@@ -578,11 +577,9 @@ namespace ProduceMore
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f / stationSpeed);
-            MethodInfo canCookStart = AccessTools.Method(typeof(StartLabOvenBehaviour), "CanCookStart");
-            MethodInfo stopCook = AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook");
-            if (!(bool)canCookStart.Invoke(behaviour, []))
+            if (!(bool)AccessTools.Method(typeof(StartLabOvenBehaviour), "CanCookStart").Invoke(behaviour, []))
             {
-                stopCook.Invoke(behaviour, []);
+                AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook").Invoke(behaviour, []);
                 behaviour.End_Networked(null);
                 yield break;
             }
@@ -595,7 +592,7 @@ namespace ProduceMore
             ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
             if (itemInstance == null)
             {
-                stopCook.Invoke(behaviour, []);
+                AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook").Invoke(behaviour, []);
                 behaviour.End_Networked(null);
                 yield break;
             }
@@ -607,12 +604,12 @@ namespace ProduceMore
             itemInstance.ChangeQuantity(-num);
             string id = (CastTo<StorableItemDefinition>(itemInstance.Definition)).StationItem.GetModule<CookableModule>().Product.ID;
             EQuality ingredientQuality = EQuality.Standard;
-            if (itemInstance is QualityItemInstance)
+            if (Is<QualityItemInstance>(itemInstance))
             {
                 ingredientQuality = (CastTo<QualityItemInstance>(itemInstance)).Quality;
             }
             behaviour.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, id));
-            stopCook.Invoke(behaviour, []);
+            AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook").Invoke(behaviour, []);
             behaviour.End_Networked(null);
             yield break;
         }
@@ -624,9 +621,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartFinishCookPrefix(FinishLabOvenBehaviour __instance)
         {
-            MethodInfo actionRoutineGetter = AccessTools.PropertyGetter(typeof(FinishLabOvenBehaviour), "actionRoutine");
-            MethodInfo actionRoutineSetter = AccessTools.PropertySetter(typeof(FinishLabOvenBehaviour), "actionRoutine");
-            if (actionRoutineGetter.Invoke(__instance, []) != null)
+            if (AccessTools.PropertyGetter(typeof(FinishLabOvenBehaviour), "actionRoutine").Invoke(__instance, []) != null)
             {
                 return false;
             }
@@ -635,7 +630,7 @@ namespace ProduceMore
                 return false;
             }
             object workRoutine = MelonCoroutines.Start(FinishCookCoroutine(__instance));
-            actionRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+            AccessTools.PropertySetter(typeof(FinishLabOvenBehaviour), "actionRoutine").Invoke(__instance, [(Coroutine)workRoutine]);
 
             return false;
         }
@@ -648,11 +643,9 @@ namespace ProduceMore
             behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f);
 
-            MethodInfo canActionStart = AccessTools.Method(typeof(FinishLabOvenBehaviour), "CanActionStart");
-            MethodInfo stopAction = AccessTools.Method(typeof(FinishLabOvenBehaviour), "StopAction");
-            if (!(bool)canActionStart.Invoke(behaviour, []))
+            if (!(bool)AccessTools.Method(typeof(FinishLabOvenBehaviour), "CanActionStart").Invoke(behaviour, []))
             {
-                stopAction.Invoke(behaviour, []);
+                AccessTools.Method(typeof(FinishLabOvenBehaviour), "StopAction").Invoke(behaviour, []);
                 behaviour.End_Networked(null);
                 yield break;
             }
@@ -673,7 +666,7 @@ namespace ProduceMore
             ItemInstance productItem = behaviour.targetOven.CurrentOperation.GetProductItem(behaviour.targetOven.CurrentOperation.Cookable.ProductQuantity * behaviour.targetOven.CurrentOperation.IngredientQuantity);
             behaviour.targetOven.OutputSlot.AddItem(productItem, false);
             behaviour.targetOven.SendCookOperation(null);
-            stopAction.Invoke(behaviour, []);
+            AccessTools.Method(typeof(FinishLabOvenBehaviour), "StopAction").Invoke(behaviour, []);
             behaviour.End_Networked(null);
             yield break;
         }
@@ -814,8 +807,7 @@ namespace ProduceMore
                     int currentMixTime = __instance.CurrentMixTime;
                     int currentMixTime2 = __instance.CurrentMixTime;
                     //__instance.CurrentMixTime = currentMixTime2 + 1;
-                    MethodInfo currentMixTimeSetter = AccessTools.PropertySetter(typeof(MixingStation), nameof(MixingStation.CurrentMixTime));
-                    currentMixTimeSetter.Invoke(__instance, [currentMixTime2 + 1]);
+                    AccessTools.PropertySetter(typeof(MixingStation), nameof(MixingStation.CurrentMixTime)).Invoke(__instance, [currentMixTime2 + 1]);
                     num = __instance.GetMixTimeForCurrentOperation();
                     if (__instance.CurrentMixTime >= num && currentMixTime < num && InstanceFinder.IsServer)
                     {
@@ -859,9 +851,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartMixingStationBehaviour __instance)
         {
-            MethodInfo startRoutineGetter = AccessTools.PropertyGetter(typeof(StartMixingStationBehaviour), "startRoutine");
-            MethodInfo startRoutineSetter = AccessTools.PropertySetter(typeof(StartMixingStationBehaviour), "startRoutine");
-            if (startRoutineGetter.Invoke(__instance, []) != null)
+            if (AccessTools.PropertyGetter(typeof(StartMixingStationBehaviour), "startRoutine").Invoke(__instance, []) != null)
             {
                 return false;
             }
@@ -870,7 +860,7 @@ namespace ProduceMore
                 return false;
             }
             object workRoutine = MelonCoroutines.Start(StartMixCoroutine(__instance));
-            startRoutineSetter.Invoke(__instance, [(Coroutine)workRoutine]);
+            AccessTools.PropertySetter(typeof(StartMixingStationBehaviour), "startRoutine").Invoke(__instance, [(Coroutine)workRoutine]);
 
             return false;
         }
@@ -890,11 +880,9 @@ namespace ProduceMore
             behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f);
 
-            MethodInfo canCookStart = AccessTools.Method(typeof(StartMixingStationBehaviour), "CanCookStart");
-            MethodInfo stopCook = AccessTools.Method(typeof(StartMixingStationBehaviour), "StopCook");
-            if (!(bool)canCookStart.Invoke(behaviour, []))
+            if (!(bool)AccessTools.Method(typeof(StartMixingStationBehaviour), "CanCookStart").Invoke(behaviour, []))
             {
-                stopCook.Invoke(behaviour, []);
+                AccessTools.Method(typeof(StartMixingStationBehaviour), "StopCook").Invoke(behaviour, []);
                 behaviour.End_Networked(null);
                 yield break;
             }
@@ -916,7 +904,7 @@ namespace ProduceMore
                 MixOperation operation = new MixOperation(product.ID, product.Quality, mixer.ID, mixQuantity);
                 behaviour.targetStation.SendMixingOperation(operation, 0);
             }
-            stopCook.Invoke(behaviour, []);
+            AccessTools.Method(typeof(StartMixingStationBehaviour), "StopCook").Invoke(behaviour, []);
             behaviour.End_Networked(null);
             yield break;
         }
@@ -1077,8 +1065,7 @@ namespace ProduceMore
         public static void GetStatePostfix(Cauldron __instance, ref Cauldron.EState __result)
         {
             // re-insert original method body.
-            MethodInfo isCookingGetter = AccessTools.PropertyGetter(typeof(Cauldron), "isCooking");
-            if ((bool)isCookingGetter.Invoke(__instance, []))
+            if ((bool)AccessTools.PropertyGetter(typeof(Cauldron), "isCooking").Invoke(__instance, []))
             {
                 __result = Cauldron.EState.Cooking;
             }
@@ -1109,13 +1096,11 @@ namespace ProduceMore
             {
                 return false;
             }
-            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress");
-            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine");
 
-            workInProgressSetter.Invoke(__instance, [true]);
+            AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress").Invoke(__instance, [true]);
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f);
             object workCoroutine = MelonCoroutines.Start(BeginCauldronCoroutine(__instance));
-            workRoutineSetter.Invoke(__instance, [(Coroutine)workCoroutine]);
+            AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine").Invoke(__instance, [(Coroutine)workCoroutine]);
             return false;
         }
 
@@ -1137,11 +1122,9 @@ namespace ProduceMore
                 EQuality quality = behaviour.Station.RemoveIngredients();
                 behaviour.Station.StartCookOperation(null, behaviour.Station.CookTime, quality);
             }
-            MethodInfo workInProgressSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress");
-            MethodInfo workRoutineSetter = AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine");
-            workInProgressSetter.Invoke(behaviour, [false]);
-            workRoutineSetter.Invoke(behaviour, [null]);
-
+            
+            AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress").Invoke(behaviour, [false]);
+            AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "workRoutine").Invoke(behaviour, [null]);
             yield break;
         }
 
@@ -1206,12 +1189,11 @@ namespace ProduceMore
             {
                 return false;
             }
-            MethodInfo packagingInProgressSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress");
-            packagingInProgressSetter.Invoke(__instance, [true]);
+            
+            AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress").Invoke(__instance, [true]);
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f / Mod.settings.GetStationSpeed("PackagingStation"));
-            MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
             object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
-            packagingRoutineSetter.Invoke(__instance, [(Coroutine)packagingCoroutine]);
+            AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine").Invoke(__instance, [(Coroutine)packagingCoroutine]);
 
             return false;
         }
@@ -1232,12 +1214,9 @@ namespace ProduceMore
             {
                 behaviour.Station.PackSingleInstance();
             }
-            //behaviour.PackagingInProgress = false;
-            //behaviour.packagingRoutine = null;
-            MethodInfo packagingInProgressSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress");
-            MethodInfo packagingRoutineSetter = AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine");
-            packagingInProgressSetter.Invoke(behaviour, [false]);
-            packagingRoutineSetter.Invoke(behaviour, [null]);
+
+            AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress").Invoke(behaviour, [false]);
+            AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "packagingRoutine").Invoke(behaviour, [null]);
             yield break;
 
         }
@@ -1278,6 +1257,134 @@ namespace ProduceMore
         public static void GetAdditiveGrowthMultiplierPostfix(ref float __result)
         {
             __result = __result * Mod.settings.GetStationSpeed("Pot");
+        }
+
+        // use our own coroutine to speed up employee animation
+        [HarmonyPatch(typeof(PotActionBehaviour), "PerformAction")]
+        [HarmonyPrefix]
+        public static bool PerformActionPrefix(PotActionBehaviour __instance)
+        {
+            if (CastTo<Botanist>(AccessTools.Property(typeof(PotActionBehaviour), "botanist").GetValue(__instance)).DEBUG)
+            {
+                string str = "PotActionBehaviour.PerformAction: Performing action ";
+                string str2 = __instance.CurrentActionType.ToString();
+                string str3 = " on pot ";
+                Pot assignedPot = __instance.AssignedPot;
+                Debug.Log(str + str2 + str3 + ((assignedPot != null) ? assignedPot.ToString() : null));
+            }
+            
+            AccessTools.PropertySetter(typeof(PotActionBehaviour), "CurrentState").Invoke(__instance, [PotActionBehaviour.EState.PerformingAction]);
+            object workRoutine = MelonCoroutines.Start(PerformActionCoroutine(__instance));
+            AccessTools.Property(typeof(PotActionBehaviour), "performActionRoutine").SetValue(__instance, (Coroutine)workRoutine);
+            return false;
+        }
+
+        // coroutine with accelerated animations
+        private static IEnumerator PerformActionCoroutine(PotActionBehaviour behaviour)
+        {
+            float stationSpeed = Mod.settings.GetStationSpeed("Pot");
+
+            behaviour.AssignedPot.SetNPCUser(CastTo<Botanist>(AccessTools.Property(typeof(PotActionBehaviour), "botanist").GetValue(behaviour)).NetworkObject);
+            behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, 0.5f);
+
+            string actionAnimation = (string)AccessTools.Method(typeof(PotActionBehaviour), "GetActionAnimation").Invoke(behaviour, [behaviour.CurrentActionType]);
+            if (actionAnimation != string.Empty)
+            {
+                AccessTools.PropertySetter(typeof(PotActionBehaviour), "currentActionAnimation").Invoke(behaviour, [actionAnimation]);
+                behaviour.Npc.SetAnimationBool_Networked(null, actionAnimation, true);
+            }
+            if (behaviour.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && !behaviour.Npc.Avatar.Anim.IsCrouched)
+            {
+                behaviour.Npc.SetCrouched_Networked(true);
+            }
+
+            AvatarEquippable actionEquippable = CastTo<AvatarEquippable>(AccessTools.Method(typeof(PotActionBehaviour), "GetActionEquippable").Invoke(behaviour, [behaviour.CurrentActionType]));
+            if (actionEquippable != null)
+            {
+                AccessTools.PropertySetter(typeof(PotActionBehaviour), "currentActionEquippable").Invoke(behaviour, [behaviour.Npc.SetEquippable_Networked_Return(null, actionEquippable.AssetPath)]);
+            }
+            
+            float waitTime = behaviour.GetWaitTime(behaviour.CurrentActionType) / stationSpeed;
+            for (float i = 0f; i < waitTime; i += Time.deltaTime)
+            {
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.AssignedPot.transform.position, 0, false);
+                yield return new WaitForEndOfFrame();
+            }
+            
+            AccessTools.Method(typeof(PotActionBehaviour), "StopPerformAction").Invoke(behaviour, []);
+            AccessTools.Method(typeof(PotActionBehaviour), "CompleteAction").Invoke(behaviour, []);
+            yield break;
+        }
+
+
+        [HarmonyPatch(typeof(PotActionBehaviour), "ActiveMinPass")]
+        [HarmonyPrefix]
+        public static bool ActiveMinPassPrefix(PotActionBehaviour __instance)
+        {
+//#if MONO_BUILD
+//            AccessTools.Method(typeof(ScheduleOne.NPCs.Behaviour.Behaviour), "ActiveMinPass").Invoke(__instance, []);
+//#else
+//            AccessTools.Method(typeof(Il2CppScheduleOne.NPCs.Behaviour.Behaviour), "ActiveMinPass").Invoke(__instance, []);
+//#endif
+
+            if (!InstanceFinder.IsServer)
+                {
+                    return false;
+                }
+                if (__instance.Npc.behaviour.DEBUG_MODE)
+                {
+                    Debug.Log("Current state: " + __instance.CurrentState.ToString(), null);
+                    Debug.Log("Is walking: " + __instance.Npc.Movement.IsMoving.ToString(), null);
+                }
+            if (__instance.CurrentState == PotActionBehaviour.EState.Idle)
+            {
+
+#if MONO_BUILD
+                string[] requiredItemIDs = CastTo<string[]>(AccessTools.Method(typeof(PotActionBehaviour), "GetRequiredItemIDs").Invoke(__instance, []));
+#else
+                Il2CppStringArray requiredItemIDs = CastTo<Il2CppStringArray>(AccessTools.Method(typeof(PotActionBehaviour), "GetRequiredItemIDs").Invoke(__instance, []));
+#endif
+                if (!__instance.DoesTaskTypeRequireSupplies(__instance.CurrentActionType) || __instance.Npc.Inventory.GetMaxItemCount(requiredItemIDs) > 0)
+                {
+                    if ((bool)AccessTools.Method(typeof(PotActionBehaviour), "IsAtPot").Invoke(__instance, []))
+                    {
+                        __instance.PerformAction();
+                        return false;
+                    }
+
+                    __instance.WalkToPot();
+                    return false;
+                }
+                else
+                {
+                    if (__instance.AssignedPot == null)
+                    {
+                        string str = "PotActionBehaviour.ActiveMinPass: No pot assigned for botanist ";
+                        Botanist botanist = CastTo<Botanist>(AccessTools.Property(typeof(PotActionBehaviour), "botanist").GetValue(__instance));
+                        Debug.LogWarning(str + ((botanist != null) ? botanist.ToString() : null), null);
+                        __instance.Disable_Networked(null);
+                        return false;
+                    }
+                    if ((bool)AccessTools.Method(typeof(PotActionBehaviour), "IsAtSupplies").Invoke(__instance, []))
+                    {
+                        Botanist botanist = CastTo<Botanist>(AccessTools.Property(typeof(PotActionBehaviour), "botanist").GetValue(__instance));
+                        if (__instance.DoesBotanistHaveMaterialsForTask(botanist, __instance.AssignedPot, __instance.CurrentActionType, __instance.AdditiveNumber))
+                        {
+                            __instance.GrabItem();
+                            return false;
+                        }
+
+                        AccessTools.Method(typeof(PotActionBehaviour), "StopPerformAction").Invoke(__instance, []);
+                        __instance.Disable_Networked(null);
+                        return false;
+                    }
+                    else
+                    {
+                        __instance.WalkToSupplies();
+                    }
+                }
+            }
+            return false;
         }
 
         public static new void RestoreDefaults()
