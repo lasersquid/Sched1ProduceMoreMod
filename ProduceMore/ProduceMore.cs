@@ -17,6 +17,7 @@ using System.Collections;
 
 
 
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
@@ -24,6 +25,7 @@ using ScheduleOne.DevUtilities;
 using ScheduleOne.Employees;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Management;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
 using ScheduleOne.StationFramework;
@@ -43,6 +45,7 @@ using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Management;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.ObjectScripts;
@@ -1420,6 +1423,78 @@ namespace ProduceMore
                 __instance.CookingTimeLabel.text += $" {minutes}m";
             }
         }
+
+
+        // use our own work coroutine to speed up animations
+        [HarmonyPatch(typeof(StartChemistryStationBehaviour), "RpcLogic___StartCook_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpg_StartCookPrefix(StartChemistryStationBehaviour __instance)
+        {
+            if (AccessTools.Property(typeof(StartChemistryStationBehaviour), "cookRoutine").GetValue(__instance) != null)
+            {
+                return false;
+            }
+            if (__instance.targetStation == null)
+            {
+                return false;
+            }
+            object workRoutine = MelonCoroutines.Start(StartCookRoutine(__instance));
+            AccessTools.Property(typeof(StartChemistryStationBehaviour), "cookRoutine").SetValue(__instance, (Coroutine)workRoutine);
+
+            return false;
+        }
+
+        private static IEnumerator StartCookRoutine(StartChemistryStationBehaviour behaviour)
+        {
+            float stationSpeed = Mod.settings.GetStationSpeed("ChemistryStation");
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
+            yield return new WaitForSeconds(0.5f);
+            behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
+            if (!(bool)AccessTools.Method(typeof(StartChemistryStationBehaviour), "CanCookStart").Invoke(behaviour, []))
+            {
+                AccessTools.Method(typeof(StartChemistryStationBehaviour), "StopCook").Invoke(behaviour, []);
+                behaviour.End_Networked(null);
+                yield break;
+            }
+            behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
+            StationRecipe recipe = (CastTo<ChemistryStationConfiguration>(behaviour.targetStation.Configuration)).Recipe.SelectedRecipe;
+            AccessTools.Method(typeof(StartChemistryStationBehaviour), "SetupBeaker").Invoke(behaviour, []);
+            yield return new WaitForSeconds(1f / stationSpeed);
+            Beaker beaker = CastTo<Beaker>(AccessTools.Property(typeof(StartChemistryStationBehaviour), "beaker").GetValue(behaviour));
+            AccessTools.Method(typeof(StartChemistryStationBehaviour), "FillBeaker").Invoke(behaviour, [recipe, beaker]);
+            yield return new WaitForSeconds(20f / stationSpeed);
+
+#if MONO_BUILD
+            var list = new List<ItemInstance>();
+#else
+            var list = new Il2CppSystem.Collections.Generic.List<ItemInstance>();
+#endif
+            for (int i = 0; i < recipe.Ingredients.Count; i++)
+            {
+                foreach (ItemDefinition itemDefinition in recipe.Ingredients[i].Items)
+                {
+                    StorableItemDefinition storableItemDefinition = CastTo<StorableItemDefinition>(itemDefinition);
+                    for (int j = 0; j < behaviour.targetStation.IngredientSlots.Length; j++)
+                    {
+                        if (behaviour.targetStation.IngredientSlots[j].ItemInstance != null && behaviour.targetStation.IngredientSlots[j].ItemInstance.Definition.ID == storableItemDefinition.ID)
+                        {
+                            list.Add(behaviour.targetStation.IngredientSlots[j].ItemInstance.GetCopy(recipe.Ingredients[i].Quantity));
+                            behaviour.targetStation.IngredientSlots[j].ChangeQuantity(-recipe.Ingredients[i].Quantity, false);
+                            break;
+                        }
+                    }
+                }
+            }
+            EQuality productQuality = recipe.CalculateQuality(list);
+            behaviour.targetStation.SendCookOperation(new ChemistryCookOperation(recipe, productQuality, beaker.Container.LiquidColor, beaker.Fillable.LiquidContainer.CurrentLiquidLevel, 0));
+            beaker.Destroy();
+            AccessTools.Property(typeof(StartChemistryStationBehaviour), "beaker").SetValue(behaviour, null);
+            AccessTools.Method(typeof(StartChemistryStationBehaviour), "StopCook").Invoke(behaviour, []);
+            behaviour.End_Networked(null);
+            yield break;
+
+        }
+
 
         public static new void RestoreDefaults()
         {
