@@ -165,7 +165,8 @@ namespace ProduceMore
 		public Dictionary<string, int> stationCapacities = new Dictionary<string, int>();
 
 		// Enable/disable employee animation acceleration
-		public bool enableStationAnimationAcceleration = false;
+		public bool enableStationAnimationAcceleration;
+		public float employeeWalkAcceleration;
 
 		// version, for upgrading purposes
 		public const string CurrentVersion = "1.0.2";
@@ -216,7 +217,6 @@ namespace ProduceMore
 			if (VersionGreaterThan("1.0.2", settings.version))
 			{
 				// upgrading from 1.0.0/1.0.1 to 1.0.2
-				settings.enableStationAnimationAcceleration = false;
 				settings.stationSpeeds.Add("BrickPress", 1f);
 				settings.stationSpeeds.Add("MixingStationMk2", 1f);
 				settings.stationCapacities.Add("MixingStationMk2", 20);
@@ -225,6 +225,8 @@ namespace ProduceMore
 				settings.stackOverrides.Add("Low-Quality Pseudo", 10);
 				settings.stackOverrides.Add("Pseudo", 10);
 				settings.stackOverrides.Add("High-Quality Pseudo", 10);
+				settings.enableStationAnimationAcceleration = false;
+				settings.employeeWalkAcceleration = 1f;
 				settings.version = "1.0.2";
 				changed = true;
 				MelonLogger.Msg($"Updated settings to v1.0.2");
@@ -425,6 +427,7 @@ namespace ProduceMore
 
 			// Disable animation acceleration by default
 			enableStationAnimationAcceleration = false;
+			employeeWalkAcceleration = 1f;
 
 			// Set version
 			version = CurrentVersion;
@@ -584,7 +587,7 @@ namespace ProduceMore
 // speed up cleaners - maybe
 // increased batch size for cauldron, laboven, and chemistry station - maybe
 // automatically migrate settings between version updates - done
-// employee walk speed multiplier
+// employee walk speed multiplier - done
 
 // Testing:
 // IL2CPP:
@@ -621,5 +624,5 @@ namespace ProduceMore
 // - acid, pseudo, and phosphorous have default stacklimit of 20 -- fixed; should probably overhaul original item limit registration
 // - laboven doesn't let you start a batch if any product is in the output -- fixed
 // - cauldron doesn't let you start a batch if any product is in the output -- fixed
-
+// - employees get stuck behind small gaps at high multipliers -- not much I can do; turn the multiplier down or change your layout
 

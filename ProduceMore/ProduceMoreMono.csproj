@@ -92,6 +92,9 @@
 	  <Reference Include="UnityEngine">
 	    <HintPath>mono_libs\UnityEngine.dll</HintPath>
 	  </Reference>
+	  <Reference Include="UnityEngine.AIModule">
+	    <HintPath>mono_libs\UnityEngine.AIModule.dll</HintPath>
+	  </Reference>
 	  <Reference Include="UnityEngine.AnimationModule">
 	    <HintPath>mono_libs\UnityEngine.AnimationModule.dll</HintPath>
 	  </Reference>

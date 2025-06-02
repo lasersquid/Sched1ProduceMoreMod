@@ -85,6 +85,9 @@
 		<Reference Include="UnityEngine">
 			<HintPath>il2cpp_libs\UnityEngine.dll</HintPath>
 		</Reference>
+		<Reference Include="UnityEngine.AIModule">
+		  <HintPath>il2cpp_libs\UnityEngine.AIModule.dll</HintPath>
+		</Reference>
 		<Reference Include="UnityEngine.AnimationModule">
 		  <HintPath>il2cpp_libs\UnityEngine.AnimationModule.dll</HintPath>
 		</Reference>

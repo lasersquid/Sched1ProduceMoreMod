@@ -9,16 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Collections;
 
 
-
-
-
-
-
-
-
-
-
-
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
@@ -27,6 +17,7 @@ using ScheduleOne.Employees;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Management;
+using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
 using ScheduleOne.StationFramework;
@@ -49,6 +40,7 @@ using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Management;
 using Il2CppScheduleOne.Money;
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.PlayerScripts;
@@ -1903,6 +1895,71 @@ namespace ProduceMore
         public static new void RestoreDefaults()
         {
             // nothing to restore, no objects were modified
+        }
+    }
+
+    [HarmonyPatch]
+    public class NpcMovementPatches : Sched1PatchesBase
+    {
+        [HarmonyPatch(typeof(NPCMovement), "UpdateSpeed")]
+        [HarmonyPrefix]
+        public static bool UpdateSpeedPostfix(NPCMovement __instance)
+        {
+            NPC npc = CastTo<NPC>(AccessTools.PropertyGetter(typeof(NPCMovement), "npc").Invoke(__instance, []));
+            float walkSpeedMultiplier = Is<Employee>(npc) ? Mod.settings.employeeWalkAcceleration : 1f;
+
+            if ((double)__instance.MovementSpeedScale >= 0.0)
+            {
+                __instance.Agent.speed = Mathf.Lerp(__instance.WalkSpeed * walkSpeedMultiplier, __instance.RunSpeed, __instance.MovementSpeedScale) * __instance.MoveSpeedMultiplier;
+                return false;
+            }
+            __instance.Agent.speed = 0f;
+
+            return false;
+        }
+
+
+        // call to updatespeed seems to have been optimized out.
+        [HarmonyPatch(typeof(NPCMovement), "FixedUpdate")]
+        [HarmonyPrefix]
+        public static bool FixedUpdatePrefix(NPCMovement __instance)
+        {
+            // re-insert original method body.
+            if (!InstanceFinder.IsServer)
+            {
+                return false;
+            }
+            if (__instance.IsPaused)
+            {
+                __instance.Agent.isStopped = true;
+            }
+            PropertyInfo timeSinceHitByCar = AccessTools.Property(typeof(NPCMovement), "timeSinceHitByCar");
+            timeSinceHitByCar.SetValue(__instance, (float)timeSinceHitByCar.GetValue(__instance) + Time.fixedDeltaTime);
+            __instance.capsuleCollider.transform.position = ((Rigidbody)AccessTools.Property(typeof(NPCMovement), "ragdollCentralRB").GetValue(__instance)).transform.position;
+            AccessTools.Method(typeof(NPCMovement), "UpdateSpeed").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "UpdateStumble").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "UpdateRagdoll").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "UpdateDestination").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "RecordVelocity").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "UpdateSlippery").Invoke(__instance, []);
+            AccessTools.Method(typeof(NPCMovement), "UpdateCache").Invoke(__instance, []);
+
+            if (!((NPCAnimation)AccessTools.Property(typeof(NPCMovement), "anim").GetValue(__instance)).Avatar.Ragdolled || !__instance.CanRecoverFromRagdoll())
+            {
+                AccessTools.Property(typeof(NPCMovement), "ragdollStaticTime").SetValue(__instance, 0f);
+                return false;
+            }
+            PropertyInfo ragdollTime = AccessTools.Property(typeof(NPCMovement), "ragdollTime");
+            ragdollTime.SetValue(__instance, (float)ragdollTime.GetValue(__instance) + Time.fixedDeltaTime);
+            PropertyInfo ragdollStaticTime = AccessTools.Property(typeof(NPCMovement), "ragdollStaticTime");
+            if (((Rigidbody)AccessTools.Property(typeof(NPCMovement), "ragdollCentralRB").GetValue(__instance)).velocity.magnitude < 0.25f)
+            {
+                ragdollStaticTime.SetValue(__instance, (float)ragdollStaticTime.GetValue(__instance) + Time.fixedDeltaTime);
+                return false;
+            }
+            ragdollStaticTime.SetValue(__instance, 0f);
+
+            return false;
         }
     }
 }
