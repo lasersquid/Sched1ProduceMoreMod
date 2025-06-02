@@ -5,9 +5,6 @@ using HarmonyLib;
 using System.Reflection;
 
 
-
-
-
 #if MONO_BUILD
 using ScheduleOne;
 using ScheduleOne.EntityFramework;
@@ -15,6 +12,7 @@ using ScheduleOne.ItemFramework;
 using ScheduleOne.StationFramework;
 #else
 using Il2CppScheduleOne;
+using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.StationFramework;
@@ -27,7 +25,6 @@ using Il2CppScheduleOne.StationFramework;
 
 namespace ProduceMore
 {
-	
 	public class ProduceMoreMod : MelonMod
 	{
 		public ProduceMoreMod()
@@ -103,7 +100,7 @@ namespace ProduceMore
 		{
 			LoggerInstance.Msg($"Loading settings from {settingsFilePath}");
 			settings = ModSettings.LoadSettings(settingsFilePath);
-			if (!File.Exists(settingsFilePath))
+			if (ModSettings.UpdateSettings(settings) || !File.Exists(settingsFilePath))
 			{
 				SaveSettings();
 			}
@@ -166,6 +163,76 @@ namespace ProduceMore
 
 		// Station capacity settings
 		public Dictionary<string, int> stationCapacities = new Dictionary<string, int>();
+
+		// Enable/disable employee animation acceleration
+		public bool enableStationAnimationAcceleration = false;
+
+		// version, for upgrading purposes
+		public const string CurrentVersion = "1.0.2";
+		public string version;
+
+		private static bool VersionGreaterThan(string version, string other)
+		{
+			// if other is null, empty string, or malformed, return true
+			if (other == null || other.Split(['.']).Count() != 3)
+			{
+				return true;
+			}
+
+			string[] versionStrings = version.Split(['.']);
+			int versionMajor = Convert.ToInt32(versionStrings[0]);
+			int versionMinor = Convert.ToInt32(versionStrings[1]);
+			int versionPatch = Convert.ToInt32(versionStrings[2]);
+
+			string[] otherStrings = version.Split(['.']);
+			int otherMajor = Convert.ToInt32(otherStrings[0]);
+			int otherMinor = Convert.ToInt32(otherStrings[1]);
+			int otherPatch = Convert.ToInt32(otherStrings[2]);
+
+			if (versionMajor > otherMajor)
+			{
+				return true;
+			}
+			else if (versionMajor == otherMajor && versionMinor > otherMinor)
+			{
+				return true;
+			}
+			else if (versionMajor == otherMajor && versionMinor == otherMinor && versionPatch > otherPatch)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+
+		}
+
+		// return true if settings were modified
+		public static bool UpdateSettings(ModSettings settings)
+		{
+			bool changed = false;
+
+			if (VersionGreaterThan("1.0.2", settings.version))
+			{
+				// upgrading from 1.0.0/1.0.1 to 1.0.2
+				settings.enableStationAnimationAcceleration = false;
+				settings.stationSpeeds.Add("BrickPress", 1f);
+				settings.stationSpeeds.Add("MixingStationMk2", 1f);
+				settings.stationCapacities.Add("MixingStationMk2", 20);
+				settings.stackOverrides.Add("Acid", 10);
+				settings.stackOverrides.Add("Phosphorus", 10);
+				settings.stackOverrides.Add("Low-Quality Pseudo", 10);
+				settings.stackOverrides.Add("Pseudo", 10);
+				settings.stackOverrides.Add("High-Quality Pseudo", 10);
+				settings.version = "1.0.2";
+				changed = true;
+				MelonLogger.Msg($"Updated settings to v1.0.2");
+			}
+
+			return changed;
+		}
+
 
 		public static ModSettings LoadSettings(string jsonPath)
 		{
@@ -335,15 +402,18 @@ namespace ProduceMore
 			// Default station speed multipliers
 			stationSpeeds.Add("LabOven", 1);
 			stationSpeeds.Add("Cauldron", 1);
+			stationSpeeds.Add("BrickPress", 1);
 			stationSpeeds.Add("ChemistryStation", 1);
 			stationSpeeds.Add("DryingRack", 1);
 			stationSpeeds.Add("MixingStation", 1);
+			stationSpeeds.Add("MixingStationMk2", 1);
 			stationSpeeds.Add("PackagingStation", 1);
 			stationSpeeds.Add("Pot", 1);
 
 			// Default station processing capacities
 			stationCapacities.Add("DryingRack", 20);
-			stationCapacities.Add("MixingStation", 20);
+			stationCapacities.Add("MixingStation", 10);
+			stationCapacities.Add("MixingStationMk2", 20);
 			stationCapacities.Add("PackagingStation", 20);
 
 			// Default stack overrides
@@ -352,6 +422,12 @@ namespace ProduceMore
 			stackOverrides.Add("Low-Quality Pseudo", 10);
 			stackOverrides.Add("Pseudo", 10);
 			stackOverrides.Add("High-Quality Pseudo", 10);
+
+			// Disable animation acceleration by default
+			enableStationAnimationAcceleration = false;
+
+			// Set version
+			version = CurrentVersion;
 		}
 
 		public int GetStackLimit(ItemInstance item)
@@ -495,7 +571,7 @@ namespace ProduceMore
 // phone app for configuration - next ver
 // support for changing settings on the fly - backend logic ready; still needs interface to test (next ver)
 // injecting into savefile - next ver
-// configurable via mod manager app
+// configurable via mod manager app - maaaaaaybe
 // separate mixingstation mk1 and mk2 - done
 // speed up station animations:
 //  - drying rack - done
@@ -503,8 +579,12 @@ namespace ProduceMore
 //	- mixing station - done
 //	- packaging station - done
 //  - pot - done
-//  - chem station 
-
+//  - chem station - done
+//	- brick press - done
+// speed up cleaners - maybe
+// increased batch size for cauldron, laboven, and chemistry station - maybe
+// automatically migrate settings between version updates - done
+// employee walk speed multiplier
 
 // Testing:
 // IL2CPP:
@@ -513,7 +593,7 @@ namespace ProduceMore
 //		DryingRackPatches - working
 //		LabOvenPatches - working
 //		MixingStationPatches - working
-//		BrickPressPatches - empty
+//		BrickPressPatches - working
 //		CauldronPatches - working
 //		PackagingStationPatches - working
 //		PotPatches - working

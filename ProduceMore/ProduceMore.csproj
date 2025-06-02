@@ -119,7 +119,7 @@
 	<PropertyGroup Condition="'$(GameVer)'=='mono'">
 		<DefineConstants>$(DefineConstants);MONO_BUILD;</DefineConstants>
 	</PropertyGroup>
-	
+
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(GameVer) -ver $(Version) -proj $(ProjName)&#xD;&#xA;del &quot;$(GameDir)\mods\$(ProjName)*.dll&quot;&#xD;&#xA;copy &quot;bin\Debug\$(TargetFramework)\$(AssemblyName).dll&quot; &quot;$(GameDir)\mods\&quot;&#xD;&#xA;" />
 	</Target>

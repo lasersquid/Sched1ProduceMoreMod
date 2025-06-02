@@ -18,6 +18,7 @@ using System.Collections;
 
 
 
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
@@ -31,6 +32,7 @@ using ScheduleOne.ObjectScripts;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Phone.Delivery;
+using ScheduleOne.Product;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
@@ -50,6 +52,7 @@ using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.PlayerScripts;
+using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI.Phone.Delivery;
@@ -354,7 +357,7 @@ namespace ProduceMore
                 Mod.originalStationTimes["DryingRack"] = 720; //replace with constant from class when there is one accessible
             }
 
-            float stationSpeed =  (float)Mod.originalStationTimes["DryingRack"] / Mod.settings.GetStationSpeed("DryingRack");
+            float stationSpeed =  Mod.settings.enableStationAnimationAcceleration ? (float)Mod.originalStationTimes["DryingRack"] / Mod.settings.GetStationSpeed("DryingRack") : Mod.originalStationTimes["DryingRack"];
             float t = Mathf.Clamp01((float)__instance.AssignedOperation.Time / stationSpeed);
             int num = Mathf.Clamp((int)stationSpeed - __instance.AssignedOperation.Time, 0, (int)stationSpeed);
             int num2 = num / 60;
@@ -446,13 +449,14 @@ namespace ProduceMore
         // Replacement coroutine for BeginAction
         private static IEnumerator BeginActionCoroutine(StartDryingRackBehaviour behaviour)
         {
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("DryingRack") : 1f;
             yield return new WaitForEndOfFrame();
             behaviour.Rack.InputSlot.ItemInstance.GetCopy(1);
             int itemCount = 0;
             while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
             {
                 behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
-                yield return new WaitForSeconds(1f / Mod.settings.GetStationSpeed("DryingRack"));
+                yield return new WaitForSeconds(1f / stationSpeed);
                 int num = itemCount;
                 itemCount = num + 1;
             }
@@ -575,23 +579,27 @@ namespace ProduceMore
         // Startcook coroutine with accelerated animations
         private static IEnumerator StartCookCoroutine(StartLabOvenBehaviour behaviour)
         {
-
-            float stationSpeed = Mod.settings.GetStationSpeed("LabOven");
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("LabOven") : 1f;
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f / stationSpeed);
+
             if (!(bool)AccessTools.Method(typeof(StartLabOvenBehaviour), "CanCookStart").Invoke(behaviour, []))
             {
                 AccessTools.Method(typeof(StartLabOvenBehaviour), "StopCook").Invoke(behaviour, []);
                 behaviour.End_Networked(null);
                 yield break;
             }
+
             behaviour.targetOven.Door.SetPosition(1f / stationSpeed);
             yield return new WaitForSeconds(0.5f / stationSpeed);
+
             behaviour.targetOven.WireTray.SetPosition(1f / stationSpeed);
             yield return new WaitForSeconds(5f / stationSpeed);
+
             behaviour.targetOven.Door.SetPosition(0f);
             yield return new WaitForSeconds(1f / stationSpeed);
+
             ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
             if (itemInstance == null)
             {
@@ -599,6 +607,7 @@ namespace ProduceMore
                 behaviour.End_Networked(null);
                 yield break;
             }
+
             int num = 1;
             if ((CastTo<StorableItemDefinition>(itemInstance.Definition)).StationItem.GetModule<CookableModule>().CookType == CookableModule.ECookableType.Solid)
             {
@@ -641,7 +650,7 @@ namespace ProduceMore
         // FinishCook coroutine with accelerated animations
         private static IEnumerator FinishCookCoroutine(FinishLabOvenBehaviour behaviour)
         {
-            float stationSpeed = Mod.settings.GetStationSpeed("LabOven");
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("LabOven") : 1f;
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f);
@@ -694,11 +703,24 @@ namespace ProduceMore
         {
             if (!Mod.processedStationCapacities.Contains(__instance))
             {
-                if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                if (Is<MixingStationMk2>(__instance))
                 {
-                    Mod.originalStationCapacities["MixingStation"] = __instance.MaxMixQuantity;
+                    if (!Mod.originalStationCapacities.ContainsKey("MixingStationMk2"))
+                    {
+                        Mod.originalStationCapacities["MixingStationMk2"] = __instance.MaxMixQuantity;
+                    }
+                    __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStationMk2");
+
                 }
-                __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+                else
+                {
+                    if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                    {
+                        Mod.originalStationCapacities["MixingStation"] = __instance.MaxMixQuantity;
+                    }
+                    __instance.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+
+                }
                 Mod.processedStationCapacities.Add(__instance);
             }
 
@@ -742,9 +764,8 @@ namespace ProduceMore
                     {
                         // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
                         Mod.originalStationTimes["MixingStationMk2"] = 3;
-                        __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStationMk2"] / Mod.settings.GetStationSpeed("MixingStationMk2"), 1f);
                     }
-
+                    __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStationMk2"] / Mod.settings.GetStationSpeed("MixingStationMk2"), 1f);
                 }
                 else
                 {
@@ -752,9 +773,8 @@ namespace ProduceMore
                     {
                         // Use a dirty magic number for now; relevant constant is not accessible in il2cpp
                         Mod.originalStationTimes["MixingStation"] = 15;
-                        __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
                     }
-
+                    __instance.MixTimePerItem = (int)Mathf.Max((float)Mod.originalStationTimes["MixingStation"] / Mod.settings.GetStationSpeed("MixingStation"), 1f);
                 }
 
                 // TODO: check if it's even necessary to modify this field anymore
@@ -762,22 +782,25 @@ namespace ProduceMore
             }
 
             int originalStationTime;
+            float stationSpeed;
             if (Is<MixingStationMk2>(__instance))
             {
+                stationSpeed = Mod.settings.GetStationSpeed("MixingStationMk2");
                 originalStationTime = Mod.originalStationTimes["MixingStationMk2"];
             }
             else
             {
+                stationSpeed = Mod.settings.GetStationSpeed("MixingStation");
                 originalStationTime = Mod.originalStationTimes["MixingStation"];
             }
-            float mixTimePerItem = (float)originalStationTime / Mod.settings.GetStationSpeed("MixingStation");
+            float mixTimePerItem = (float)originalStationTime / stationSpeed;
 
             if (__instance.CurrentMixOperation == null)
             {
                 __result = 0;
                 return false;
             }
-            __result = (int)Mathf.Max((mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity), 0f);
+            __result = (int)Mathf.Max((mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity), 1f);
 
             return false;
         }
@@ -788,11 +811,24 @@ namespace ProduceMore
         {
             if (!Mod.processedStationCapacities.Contains(__instance.targetStation))
             {
-                if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                if (Is<MixingStationMk2>(__instance))
                 {
-                    Mod.originalStationCapacities["MixingStation"] = __instance.targetStation.MaxMixQuantity;
+                    if (!Mod.originalStationCapacities.ContainsKey("MixingStationMk2"))
+                    {
+                        Mod.originalStationCapacities["MixingStationMk2"] = __instance.targetStation.MaxMixQuantity;
+                    }
+                    __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStationMk2");
+
                 }
-                __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+                else
+                {
+                    if (!Mod.originalStationCapacities.ContainsKey("MixingStation"))
+                    {
+                        Mod.originalStationCapacities["MixingStation"] = __instance.targetStation.MaxMixQuantity;
+                    }
+                    __instance.targetStation.MaxMixQuantity = Mod.settings.GetStationCapacity("MixingStation");
+
+                }
                 Mod.processedStationCapacities.Add(__instance.targetStation);
             }
         }
@@ -809,7 +845,6 @@ namespace ProduceMore
                 {
                     int currentMixTime = __instance.CurrentMixTime;
                     int currentMixTime2 = __instance.CurrentMixTime;
-                    //__instance.CurrentMixTime = currentMixTime2 + 1;
                     AccessTools.PropertySetter(typeof(MixingStation), nameof(MixingStation.CurrentMixTime)).Invoke(__instance, [currentMixTime2 + 1]);
                     num = __instance.GetMixTimeForCurrentOperation();
                     if (__instance.CurrentMixTime >= num && currentMixTime < num && InstanceFinder.IsServer)
@@ -871,7 +906,11 @@ namespace ProduceMore
         private static IEnumerator StartMixCoroutine(StartMixingStationBehaviour behaviour)
         {
             float stationSpeed;
-            if (Is<MixingStationMk2>(behaviour.targetStation))
+            if (!Mod.settings.enableStationAnimationAcceleration)
+            {
+                stationSpeed = 1f;
+            }
+            else if (Is<MixingStationMk2>(behaviour.targetStation))
             {
                 stationSpeed = Mod.settings.GetStationSpeed("MixingStationMk2");
             }
@@ -889,6 +928,7 @@ namespace ProduceMore
                 behaviour.End_Networked(null);
                 yield break;
             }
+
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
             QualityItemInstance product = CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
@@ -900,6 +940,7 @@ namespace ProduceMore
                 yield return new WaitForSeconds(1f / stationSpeed);
                 num = i;
             }
+
             if (InstanceFinder.IsServer)
             {
                 behaviour.targetStation.ProductSlot.ChangeQuantity(-mixQuantity, false);
@@ -990,14 +1031,64 @@ namespace ProduceMore
 
 
     // Brick press patches
-    // currently empty
     [HarmonyPatch]
     public class BrickPressPatches : Sched1PatchesBase
     {
-        // currently empty
+        // call our own coroutine with accelerated animations
+        [HarmonyPatch(typeof(BrickPressBehaviour), "RpcLogic___BeginPackaging_2166136261")]
+        [HarmonyPrefix]
+        public static bool Rpc_BeginPackagingPrefix(BrickPressBehaviour __instance)
+        {
+            if (__instance.PackagingInProgress)
+            {
+                return false;
+            }
+            if (__instance.Press == null)
+            {
+                return false;
+            }
+            AccessTools.PropertySetter(typeof(BrickPressBehaviour), "PackagingInProgress").Invoke(__instance, [true]);
+            __instance.Npc.Movement.FaceDirection(__instance.Press.StandPoint.forward, 0.5f);
+            object workRoutine = MelonCoroutines.Start(PackagingCoroutine(__instance));
+            AccessTools.Property(typeof(BrickPressBehaviour), "packagingRoutine").SetValue(__instance, (Coroutine)workRoutine);
+
+            return false;
+        }
+
+        private static IEnumerator PackagingCoroutine(BrickPressBehaviour behaviour)
+        {
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("BrickPress") : 1f;
+            yield return new WaitForEndOfFrame();
+
+            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", true);
+            float packageTime = 15f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * stationSpeed);
+            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            {
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Press.uiPoint.position, 0, false);
+                yield return new WaitForEndOfFrame();
+            }
+
+            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            yield return new WaitForSeconds(0.2f);
+
+            behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
+            behaviour.Press.PlayPressAnim();
+            yield return new WaitForSeconds(1f);
+
+            ProductItemInstance product;
+            if (InstanceFinder.IsServer && behaviour.Press.HasSufficientProduct(out product))
+            {
+                behaviour.Press.CompletePress(product);
+            }
+            AccessTools.PropertySetter(typeof(BrickPressBehaviour), "PackagingInProgress").Invoke(behaviour, [false]);
+            AccessTools.Property(typeof(BrickPressBehaviour), "packagingRoutine").SetValue(behaviour, null);
+            yield break;
+        }
+
+
         public static new void RestoreDefaults()
         {
-            // currently empty
+            // We don't modify any game objects, so there's nothing to restore
         }
     }
 
@@ -1285,7 +1376,7 @@ namespace ProduceMore
         // coroutine with accelerated animations
         private static IEnumerator PerformActionCoroutine(PotActionBehaviour behaviour)
         {
-            float stationSpeed = Mod.settings.GetStationSpeed("Pot");
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("Pot") : 1f;
 
             behaviour.AssignedPot.SetNPCUser(CastTo<Botanist>(AccessTools.Property(typeof(PotActionBehaviour), "botanist").GetValue(behaviour)).NetworkObject);
             behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, 0.5f);
@@ -1446,9 +1537,10 @@ namespace ProduceMore
 
         private static IEnumerator StartCookRoutine(StartChemistryStationBehaviour behaviour)
         {
-            float stationSpeed = Mod.settings.GetStationSpeed("ChemistryStation");
+            float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("ChemistryStation") : 1f;
             behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
             yield return new WaitForSeconds(0.5f);
+
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
             if (!(bool)AccessTools.Method(typeof(StartChemistryStationBehaviour), "CanCookStart").Invoke(behaviour, []))
             {
@@ -1456,10 +1548,12 @@ namespace ProduceMore
                 behaviour.End_Networked(null);
                 yield break;
             }
+
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
             StationRecipe recipe = (CastTo<ChemistryStationConfiguration>(behaviour.targetStation.Configuration)).Recipe.SelectedRecipe;
             AccessTools.Method(typeof(StartChemistryStationBehaviour), "SetupBeaker").Invoke(behaviour, []);
             yield return new WaitForSeconds(1f / stationSpeed);
+            
             Beaker beaker = CastTo<Beaker>(AccessTools.Property(typeof(StartChemistryStationBehaviour), "beaker").GetValue(behaviour));
             AccessTools.Method(typeof(StartChemistryStationBehaviour), "FillBeaker").Invoke(behaviour, [recipe, beaker]);
             yield return new WaitForSeconds(20f / stationSpeed);
@@ -1487,6 +1581,7 @@ namespace ProduceMore
             }
             EQuality productQuality = recipe.CalculateQuality(list);
             behaviour.targetStation.SendCookOperation(new ChemistryCookOperation(recipe, productQuality, beaker.Container.LiquidColor, beaker.Fillable.LiquidContainer.CurrentLiquidLevel, 0));
+
             beaker.Destroy();
             AccessTools.Property(typeof(StartChemistryStationBehaviour), "beaker").SetValue(behaviour, null);
             AccessTools.Method(typeof(StartChemistryStationBehaviour), "StopCook").Invoke(behaviour, []);
