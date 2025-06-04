@@ -626,13 +626,13 @@ namespace ProduceMore
 // Bugs:
 // - mixers have hard cap of 1s per item -- fixed
 // - in multiplayer, guests can't start cauldrons until full original timer has elapsed -- needs testing
-// - no tag for storage -- beta problem
+// - no tag for storage -- beta problem; next ver
 // - mixers don't finish when time hits zero on high multiplier -- fixed
 // - packagers still limited by animation time -- fixed, mostly. they're a lot faster now.
 // - mixing station mk2 limited to mk1 speeds -- fixed
 // - acid, pseudo, and phosphorous have default stacklimit of 20 -- fixed; should probably overhaul original item limit registration
 // - laboven doesn't let you start a batch if any product is in the output -- fixed
 // - cauldron doesn't let you start a batch if any product is in the output -- fixed
-// - employees get stuck behind small gaps at high multipliers -- not much I can do; turn the multiplier down or change your layout
-// - poor performance on Mono -- fixed
+// - employees get stuck behind small gaps at high walk multipliers -- not much I can do; turn the multiplier down or change your layout
+// - poor performance on Mono -- fixed (turns out throwing dozens of exceptions a second is bad for performance)
 

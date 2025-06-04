@@ -1,6 +1,6 @@
 # Sched1ProduceMoreMod
 
-Configure stack sizes, station speed, and station capacity, all in one mod.
+Configure stack sizes, station speed, and station capacity, all in one mod. Now featuring configurable employee animation and walk speeds.
 
 Compatible with IL2CPP and Mono versions (main and alternate branches) of Schedule I.
 

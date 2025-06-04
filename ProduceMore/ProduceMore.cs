@@ -452,7 +452,6 @@ namespace ProduceMore
             AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress").Invoke(__instance, [true]);
             __instance.Npc.Movement.FacePoint(__instance.Rack.uiPoint.position, 0.5f);
             object workCoroutine = MelonCoroutines.Start(BeginActionCoroutine(__instance));
-            //AccessTools.Field(typeof(StartDryingRackBehaviour), "workRoutine").SetValue(__instance, (Coroutine)workCoroutine);
             SetField(typeof(StartDryingRackBehaviour), "workRoutine", __instance, (Coroutine)workCoroutine);
             return false;
         }
@@ -476,7 +475,6 @@ namespace ProduceMore
                 behaviour.Rack.StartOperation();
             }
             AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress").Invoke(behaviour, [false]);
-            //AccessTools.Field(typeof(StartDryingRackBehaviour), "workRoutine").SetValue(behaviour, null);
             SetField(typeof(StartDryingRackBehaviour), "workRoutine", behaviour, null);
             yield break;
         }
@@ -579,7 +577,6 @@ namespace ProduceMore
                     return false;
                 }
                 object workRoutine = MelonCoroutines.Start(StartCookCoroutine(__instance));
-                //cookRoutine.SetValue(__instance, (Coroutine)workRoutine);
                 SetField(typeof(StartLabOvenBehaviour), "cookRoutine", __instance, (Coroutine)workRoutine);
             }
             catch (Exception e)
@@ -649,7 +646,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartFinishCookPrefix(FinishLabOvenBehaviour __instance)
         {
-            //if (AccessTools.Field(typeof(FinishLabOvenBehaviour), "actionRoutine").GetValue(__instance) != null)
             if (GetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance) != null)
             {
                 return false;
@@ -659,7 +655,6 @@ namespace ProduceMore
                 return false;
             }
             object workRoutine = MelonCoroutines.Start(FinishCookCoroutine(__instance));
-            //AccessTools.Field(typeof(FinishLabOvenBehaviour), "actionRoutine").SetValue(__instance, (Coroutine)workRoutine);
             SetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance, (Coroutine)workRoutine);
 
             return false;
@@ -914,7 +909,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartMixingStationBehaviour __instance)
         {
-            //if (AccessTools.Field(typeof(StartMixingStationBehaviour), "startRoutine").GetValue(__instance) != null)
             if (GetField(typeof(StartMixingStationBehaviour), "startRoutine", __instance) != null)
             {
                 return false;
@@ -1076,7 +1070,6 @@ namespace ProduceMore
             AccessTools.PropertySetter(typeof(BrickPressBehaviour), "PackagingInProgress").Invoke(__instance, [true]);
             __instance.Npc.Movement.FaceDirection(__instance.Press.StandPoint.forward, 0.5f);
             object workRoutine = MelonCoroutines.Start(PackagingCoroutine(__instance));
-            //AccessTools.Field(typeof(BrickPressBehaviour), "packagingRoutine").SetValue(__instance, (Coroutine)workRoutine);
             SetField(typeof(BrickPressBehaviour), "packagingRoutine", __instance, (Coroutine)workRoutine);
 
             return false;
@@ -1109,7 +1102,6 @@ namespace ProduceMore
             }
             AccessTools.PropertySetter(typeof(BrickPressBehaviour), "PackagingInProgress").Invoke(behaviour, [false]);
             
-            //AccessTools.Field(typeof(BrickPressBehaviour), "packagingRoutine").SetValue(behaviour, null);
             SetField(typeof(BrickPressBehaviour), "packagingRoutine", behaviour, null);
             yield break;
         }
@@ -1303,7 +1295,7 @@ namespace ProduceMore
             }
         }
 
-        // patch packaging coroutine to reduce animation time
+        // call our own packaging coroutine to reduce animation time
         [HarmonyPatch(typeof(PackagingStationBehaviour), "RpcLogic___BeginPackaging_2166136261")]
         [HarmonyPrefix]
         public static bool RpcLogic_BeginPackagingPrefix(PackagingStationBehaviour __instance)
@@ -1387,16 +1379,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool PerformActionPrefix(PotActionBehaviour __instance)
         {
-            Mod.LoggerInstance.Msg($"in performactionprefix for potactionbehaviour");
-            object obj = GetField(typeof(PotActionBehaviour), "botanist", __instance);
-            if (obj == null)
-            {
-                Mod.LoggerInstance.Msg($"couldn't get botanist field??");
-            }
-            else
-            {
-                Mod.LoggerInstance.Msg($"botanist is {CastTo<Botanist>(obj).name}");
-            }
             if (CastTo<Botanist>(GetField(typeof(PotActionBehaviour), "botanist", __instance)).DEBUG)
             {
                 string str = "PotActionBehaviour.PerformAction: Performing action ";
@@ -1454,12 +1436,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool ActiveMinPassPrefix(PotActionBehaviour __instance)
         {
-//#if MONO_BUILD
-//            AccessTools.Method(typeof(ScheduleOne.NPCs.Behaviour.Behaviour), "ActiveMinPass").Invoke(__instance, []);
-//#else
-//            AccessTools.Method(typeof(Il2CppScheduleOne.NPCs.Behaviour.Behaviour), "ActiveMinPass").Invoke(__instance, []);
-//#endif
-
             if (!InstanceFinder.IsServer)
                 {
                     return false;
@@ -1522,7 +1498,7 @@ namespace ProduceMore
 
         public static new void RestoreDefaults()
         {
-            // no need to restore anything, since we never modified any objects
+            // no need to restore anything, since we never modified any game objects
         }
     }
 
@@ -1574,6 +1550,7 @@ namespace ProduceMore
             return false;
         }
 
+        // Coroutine with accelerated animations
         private static IEnumerator StartCookRoutine(StartChemistryStationBehaviour behaviour)
         {
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("ChemistryStation") : 1f;
@@ -1948,9 +1925,9 @@ namespace ProduceMore
 
     
     [HarmonyPatch]
-    public class NpcMovementPatches : Sched1PatchesBase
+    public class NPCMovementPatches : Sched1PatchesBase
     {
-        // using accesstools every fixedupdate is too much of a performance hit on mono
+        // apply speed multiplier if NPC is an employee
         [HarmonyPatch(typeof(NPCMovement), "UpdateSpeed")]
         [HarmonyPrefix]
         public static bool UpdateSpeedPrefix(NPCMovement __instance)
@@ -1988,7 +1965,6 @@ namespace ProduceMore
             }
             PropertyInfo timeSinceHitByCar = AccessTools.Property(typeof(NPCMovement), "timeSinceHitByCar");
             timeSinceHitByCar.SetValue(__instance, (float)timeSinceHitByCar.GetValue(__instance) + Time.fixedDeltaTime);
-            //__instance.capsuleCollider.transform.position = ((Rigidbody)AccessTools.Field(typeof(NPCMovement), "ragdollCentralRB").GetValue(__instance)).transform.position;
             __instance.capsuleCollider.transform.position = ((Rigidbody)GetField(typeof(NPCMovement), "ragdollCentralRB", __instance)).transform.position;
             AccessTools.Method(typeof(NPCMovement), "UpdateSpeed").Invoke(__instance, []);
             AccessTools.Method(typeof(NPCMovement), "UpdateStumble").Invoke(__instance, []);
@@ -2016,5 +1992,11 @@ namespace ProduceMore
             return false;
         }
 #endif
+
+        public static new void RestoreDefaults()
+        {
+            // no game objects were changed, so we don't need to do anything
+        }
+
     }
 }
