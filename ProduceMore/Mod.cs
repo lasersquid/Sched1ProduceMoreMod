@@ -5,16 +5,20 @@ using HarmonyLib;
 using System.Reflection;
 
 
+
 #if MONO_BUILD
 using ScheduleOne;
+using ScheduleOne.DevUtilities;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.NPCs;
 using ScheduleOne.StationFramework;
 #else
 using Il2CppScheduleOne;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
@@ -40,6 +44,8 @@ namespace ProduceMore
 			originalStationCapacities = new Dictionary<string, int>();
 			originalStationTimes = new Dictionary<string, int>();
 			originalRecipeTimes = new Dictionary<StationRecipe, int>(unityComparer);
+
+			registeredEmployees = new HashSet<NPC>(unityComparer);
 		}
 
 		public IEqualityComparer<UnityEngine.Object> unityComparer;
@@ -52,6 +58,7 @@ namespace ProduceMore
 		public Dictionary<string, int> originalStationCapacities;
 		public Dictionary<string, int> originalStationTimes;
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
+		public HashSet<NPC> registeredEmployees;
 		private bool needsReset = false;
 
 		public ModSettings settings;
@@ -601,17 +608,19 @@ namespace ProduceMore
 //		PackagingStationPatches - working
 //		PotPatches - working
 //		CashPatches - working
+//		NPCMovementPatches - needs testing
 // Mono:
-//		ItemInstancePatches - working
-//		ChemistryStationPatches - working
+//		ItemInstancePatches - needs testing
+//		ChemistryStationPatches - needs testing
 //		DryingRackPatches - working
-//		LabOvenPatches - working
-//		MixingStationPatches - working
-//		BrickPressPatches - empty
+//		LabOvenPatches - speed works, employee acceleration works
+//		MixingStationPatches - needs testing
+//		BrickPressPatches - working
 //		CauldronPatches - working
-//		PackagingStationPatches - working
+//		PackagingStationPatches - needs testing
 //		PotPatches - working
 //		CashPatches - working
+//		NPCMovementPatches - working
 
 
 // Bugs:
@@ -625,4 +634,5 @@ namespace ProduceMore
 // - laboven doesn't let you start a batch if any product is in the output -- fixed
 // - cauldron doesn't let you start a batch if any product is in the output -- fixed
 // - employees get stuck behind small gaps at high multipliers -- not much I can do; turn the multiplier down or change your layout
+// - poor performance on Mono -- due to walkspeed patches hooking FixedUpdate, called many times per second. looking for another hook.
 
