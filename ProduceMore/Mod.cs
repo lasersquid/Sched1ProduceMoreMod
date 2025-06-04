@@ -610,14 +610,14 @@ namespace ProduceMore
 //		CashPatches - working
 //		NPCMovementPatches - needs testing
 // Mono:
-//		ItemInstancePatches - needs testing
-//		ChemistryStationPatches - needs testing
+//		ItemInstancePatches - working
+//		ChemistryStationPatches - working
 //		DryingRackPatches - working
 //		LabOvenPatches - speed works, employee acceleration works
-//		MixingStationPatches - needs testing
+//		MixingStationPatches - working
 //		BrickPressPatches - working
 //		CauldronPatches - working
-//		PackagingStationPatches - needs testing
+//		PackagingStationPatches - working
 //		PotPatches - working
 //		CashPatches - working
 //		NPCMovementPatches - working
@@ -634,5 +634,5 @@ namespace ProduceMore
 // - laboven doesn't let you start a batch if any product is in the output -- fixed
 // - cauldron doesn't let you start a batch if any product is in the output -- fixed
 // - employees get stuck behind small gaps at high multipliers -- not much I can do; turn the multiplier down or change your layout
-// - poor performance on Mono -- due to walkspeed patches hooking FixedUpdate, called many times per second. looking for another hook.
+// - poor performance on Mono -- fixed
 
