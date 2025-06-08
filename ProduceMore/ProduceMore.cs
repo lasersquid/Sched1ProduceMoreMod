@@ -77,8 +77,17 @@ namespace ProduceMore
 #if MONO_BUILD
             AccessTools.Field(type, fieldName).SetValue(target, value);
 #else
-            AccessTools.Property(type,fieldName).SetValue(target,value);
+            AccessTools.Property(type, fieldName).SetValue(target, value);
 #endif
+        }
+
+        public static object GetProperty(Type type, string fieldName, object target)
+        {
+            return AccessTools.Property(type, fieldName).GetValue(target);
+        }
+        public static void SetProperty(Type type, string fieldName, object target, object value)
+        {
+            AccessTools.Property(type, fieldName).SetValue(target, value);
         }
 
         public static void SetMod(ProduceMoreMod mod)
@@ -114,6 +123,11 @@ namespace ProduceMore
             return o.TryCast<T>() != null;
         }
 #endif
+
+        public static void Log(string message)
+        {
+            Mod.LoggerInstance.Msg(message);
+        }
 
         public static void RestoreDefaults()
         {
@@ -479,6 +493,21 @@ namespace ProduceMore
             yield break;
         }
 
+        [HarmonyPatch(typeof(StartDryingRackBehaviour), "StopCauldron")]
+        [HarmonyPrefix]
+        public static bool StopCauldronPrefix(StartDryingRackBehaviour __instance)
+        {
+            object workRoutine = GetField(typeof(StartDryingRackBehaviour), "workRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(StartDryingRackBehaviour), "workRoutine", __instance, null);
+            }
+            AccessTools.PropertySetter(typeof(StartDryingRackBehaviour), "WorkInProgress").Invoke(__instance, [false]);
+
+            return false;
+        }
+
         public static new void RestoreDefaults()
         {
             try
@@ -640,6 +669,25 @@ namespace ProduceMore
         }
 
 
+        [HarmonyPatch(typeof(StartLabOvenBehaviour), "StopCook")]
+        [HarmonyPrefix]
+        public static bool StopCookPrefix(StartLabOvenBehaviour __instance)
+        {
+            if (__instance.targetOven != null)
+            {
+                __instance.targetOven.SetNPCUser(null);
+            }
+            object workRoutine = GetField(typeof(StartLabOvenBehaviour), "cookRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(StartLabOvenBehaviour), "cookRoutine", __instance, null);
+            }
+
+            return false;
+        }
+
+
 
         // Call our own finishcook coroutine with accelerated animations
         [HarmonyPatch(typeof(FinishLabOvenBehaviour), "RpcLogic___StartAction_2166136261")]
@@ -703,6 +751,23 @@ namespace ProduceMore
             yield break;
         }
 
+        [HarmonyPatch(typeof(FinishLabOvenBehaviour), "StopAction")]
+        [HarmonyPrefix]
+        public static bool StopActionPrefix(FinishLabOvenBehaviour __instance)
+        {
+            __instance.targetOven.SetNPCUser(null);
+            __instance.Npc.SetEquippable_Networked(null, string.Empty);
+            __instance.Npc.SetAnimationBool_Networked(null, "UseHammer", false);
+
+            object workRoutine = GetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance, null);
+            }
+
+            return false;
+        }
 
         public static new void RestoreDefaults()
         {
@@ -954,11 +1019,11 @@ namespace ProduceMore
             QualityItemInstance product = CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
             ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
-            int num;
-            for (int i = 0; i < mixQuantity; i = num + 1)
+            float mixTime = (float)mixQuantity / stationSpeed;
+            // waiting for more than a second or two at a time is a bad idea.
+            for (int i = 0; i < mixTime; ++i)
             {
-                yield return new WaitForSeconds(1f / stationSpeed);
-                num = i;
+                yield return new WaitForSeconds(1f);
             }
 
             if (InstanceFinder.IsServer)
@@ -968,9 +1033,32 @@ namespace ProduceMore
                 MixOperation operation = new MixOperation(product.ID, product.Quality, mixer.ID, mixQuantity);
                 behaviour.targetStation.SendMixingOperation(operation, 0);
             }
+
             AccessTools.Method(typeof(StartMixingStationBehaviour), "StopCook").Invoke(behaviour, []);
             behaviour.End_Networked(null);
             yield break;
+        }
+
+
+        [HarmonyPatch(typeof(StartMixingStationBehaviour), "StopCook")]
+        [HarmonyPrefix]
+        public static bool StopCookPrefix(StartMixingStationBehaviour __instance)
+        {
+            if (__instance.targetStation != null)
+            {
+                __instance.targetStation.SetNPCUser(null);
+            }
+            __instance.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", false);
+
+            object workRoutine = GetField(typeof(StartMixingStationBehaviour), "startRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(StartMixingStationBehaviour), "startRoutine", __instance, null);
+            }
+
+            return false;
+
         }
 
         public static new void RestoreDefaults()
@@ -1243,7 +1331,27 @@ namespace ProduceMore
             yield break;
         }
 
-        // capacity takes care of itself
+
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "StopCauldron")]
+        [HarmonyPrefix]
+        public static bool StopCauldronPrefix(StartCauldronBehaviour __instance)
+        {
+            object workRoutine = GetField(typeof(StartCauldronBehaviour), "workRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(StartCauldronBehaviour), "workRoutine", __instance, null);
+            }
+            if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
+            {
+                __instance.Station.SetNPCUser(null);
+            }
+            AccessTools.PropertySetter(typeof(StartCauldronBehaviour), "WorkInProgress").Invoke(__instance, [false]);
+            return false;
+        }
+
+
+
 
         public static new void RestoreDefaults()
         {
@@ -1336,7 +1444,25 @@ namespace ProduceMore
 
         }
 
-        // capacity takes care of itself
+
+        [HarmonyPatch(typeof(PackagingStationBehaviour), "StopPackaging")]
+        [HarmonyPrefix]
+        public static bool StopPackagingPrefix(PackagingStationBehaviour __instance)
+        {
+            object workRoutine = GetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance, null);
+            }
+            __instance.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
+            {
+                __instance.Station.SetNPCUser(null);
+            }
+            AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress").Invoke(__instance, [false]);
+            return false;
+        }
 
         public static new void RestoreDefaults()
         {
@@ -1429,6 +1555,44 @@ namespace ProduceMore
             AccessTools.Method(typeof(PotActionBehaviour), "StopPerformAction").Invoke(behaviour, []);
             AccessTools.Method(typeof(PotActionBehaviour), "CompleteAction").Invoke(behaviour, []);
             yield break;
+        }
+
+        [HarmonyPatch(typeof(PotActionBehaviour), "StopPerformAction")]
+        [HarmonyPrefix]
+        public static bool StopPerformActionPrefix(PotActionBehaviour __instance)
+        {
+            if (__instance.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && __instance.Npc.Avatar.Anim.IsCrouched)
+            {
+                __instance.Npc.SetCrouched_Networked(false);
+            }
+            SetProperty(typeof(PotActionBehaviour), "CurrentState", __instance, PotActionBehaviour.EState.Idle);
+
+            object workRoutine = GetField(typeof(PotActionBehaviour), "performActionRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(PotActionBehaviour), "performActionRoutine", __instance, null);
+            }
+
+            AvatarEquippable currentActionEquippable = CastTo<AvatarEquippable>(GetField(typeof(PotActionBehaviour), "currentActionEquippable", __instance));
+            if (currentActionEquippable != null)
+            {
+                __instance.Npc.SetEquippable_Networked(null, string.Empty);
+                SetField(typeof(PotActionBehaviour), "currentActionEquippable", __instance, null);
+            }
+            string currentActionAnimation = CastTo<string>(GetField(typeof(PotActionBehaviour), "currentActionAnimation", __instance));
+            if (currentActionAnimation != string.Empty)
+            {
+                __instance.Npc.SetAnimationBool_Networked(null, currentActionAnimation, false);
+                SetField(typeof(PotActionBehaviour), "currentActionAnimation", __instance, string.Empty);
+            }
+
+            Botanist botanist = CastTo<Botanist>(GetField(typeof(PotActionBehaviour), "botanist", __instance));
+            if (__instance.AssignedPot != null && __instance.AssignedPot.NPCUserObject == botanist.NetworkObject)
+            {
+                __instance.AssignedPot.SetNPCUser(null);
+            }
+            return false;
         }
 
 
@@ -1534,7 +1698,7 @@ namespace ProduceMore
         // use our own work coroutine to speed up animations
         [HarmonyPatch(typeof(StartChemistryStationBehaviour), "RpcLogic___StartCook_2166136261")]
         [HarmonyPrefix]
-        public static bool Rpg_StartCookPrefix(StartChemistryStationBehaviour __instance)
+        public static bool Rpc_StartCookPrefix(StartChemistryStationBehaviour __instance)
         {
             if (GetField(typeof(StartChemistryStationBehaviour), "cookRoutine", __instance) != null)
             {
@@ -1606,6 +1770,22 @@ namespace ProduceMore
 
         }
 
+
+        [HarmonyPatch(typeof(StartChemistryStationBehaviour), "StopCook")]
+        [HarmonyPrefix]
+        public static bool StopCookPrefix(StartChemistryStationBehaviour __instance)
+        {
+            __instance.targetStation.SetNPCUser(null);
+            __instance.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", false);
+            object workRoutine = GetField(typeof(StartChemistryStationBehaviour), "cookRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(StartChemistryStationBehaviour), "cookRoutine", __instance, null);
+            }
+
+            return false;
+        }
 
         public static new void RestoreDefaults()
         {
