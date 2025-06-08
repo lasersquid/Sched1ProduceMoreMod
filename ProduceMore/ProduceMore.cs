@@ -10,11 +10,13 @@ using System.Collections;
 
 
 
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Employees;
+using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Management;
@@ -38,6 +40,7 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
+using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Management;
@@ -255,7 +258,6 @@ namespace ProduceMore
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
-
         }
     }
 
@@ -326,7 +328,6 @@ namespace ProduceMore
         {
             // modifications reverted by ItemCapacityPatches.RestoreDefaults
         }
-
     }
 
     // Patch drying rack capacity and speed
@@ -891,6 +892,42 @@ namespace ProduceMore
 
             return false;
         }
+
+        [HarmonyPatch(typeof(Chemist), "GetMixStationsReadyToMove")]
+        [HarmonyPrefix]
+        public static bool GetMixStationsReadyToMovePrefix(Chemist __instance, ref List<MixingStation> __result)
+        {
+            List<MixingStation> list = new List<MixingStation>();
+
+            foreach (MixingStation mixingStation in CastTo<ChemistConfiguration>(GetProperty(typeof(Chemist), "configuration", __instance)).MixStations)
+            {
+                ItemSlot outputSlot = mixingStation.OutputSlot;
+                BuildableItem destination = CastTo<MixingStationConfiguration>(mixingStation.Configuration).Destination.SelectedObject;
+                //TODO: move transitroutevalid check after packaging station check
+                if (outputSlot.Quantity != 0 && __instance.MoveItemBehaviour.IsTransitRouteValid(CastTo<MixingStationConfiguration>(mixingStation.Configuration).DestinationRoute, outputSlot.ItemInstance.ID))
+                {
+                    // Only deliver to packaging stations with at least half a stack of space in input slot.
+                    if (Is<PackagingStation>(destination))
+                    {
+                        PackagingStation station = CastTo<PackagingStation>(destination);
+                        int inputStackLimit = Mod.settings.GetStackLimit(station.InputSlots[0].ItemInstance);
+                        if (inputStackLimit - station.InputSlots[0].Quantity > inputStackLimit / 2)
+                        {
+                            list.Add(mixingStation);
+                        }
+                    }
+                    else
+                    {
+                        list.Add(mixingStation);
+
+                    }
+                }
+            }
+            __result = list;
+
+            return false;
+        }
+
 
         [HarmonyPatch(typeof(StartMixingStationBehaviour), "StartCook")]
         [HarmonyPrefix]
