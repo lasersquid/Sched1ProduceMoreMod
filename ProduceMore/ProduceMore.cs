@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Collections;
 
 
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
@@ -20,10 +21,11 @@ using ScheduleOne.Management;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
+using ScheduleOne.Product;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
+using ScheduleOne.UI.Management;
 using ScheduleOne.UI.Phone.Delivery;
-using ScheduleOne.Product;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
@@ -47,6 +49,7 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppScheduleOne.UI.Items;
+using Il2CppScheduleOne.UI.Management;
 using Il2CppScheduleOne.UI.Phone.Delivery;
 using Il2CppScheduleOne.UI.Shop;
 using Il2CppScheduleOne.UI.Stations.Drying_rack;
@@ -217,7 +220,6 @@ namespace ProduceMore
             }
             if (__instance.ItemInstance == null || __instance.ItemInstance.CanStackWith(item, false))
             {
-                //__result = item.StackLimit - __instance.Quantity;
                 __result = Mod.settings.GetStackLimit(item) - __instance.Quantity;
                 return;
             }
@@ -249,7 +251,7 @@ namespace ProduceMore
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-				Mod.LoggerInstance.Warning($"Source: {e.Source}");
+                Mod.LoggerInstance.Warning($"Source: {e.Source}");
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
@@ -531,7 +533,7 @@ namespace ProduceMore
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-				Mod.LoggerInstance.Warning($"Source: {e.Source}");
+                Mod.LoggerInstance.Warning($"Source: {e.Source}");
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
@@ -1130,11 +1132,22 @@ namespace ProduceMore
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-				Mod.LoggerInstance.Warning($"Source: {e.Source}");
+                Mod.LoggerInstance.Warning($"Source: {e.Source}");
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
         }
+
+
+        // increase threshold
+        [HarmonyPatch(typeof(MixingStationUIElement), "Initialize")]
+        [HarmonyPrefix]
+        public static void InitializeUIPrefix(MixingStation station)
+        {
+            int stationCapacity = Is<MixingStationMk2>(station) ? Mod.settings.GetStationCapacity("MixingStationMk2") : Mod.settings.GetStationCapacity("MixingStation");
+            CastTo<MixingStationConfiguration>(station.Configuration).StartThrehold.Configure(1f, stationCapacity, true);
+        }
+
     }
 
 
@@ -1378,7 +1391,7 @@ namespace ProduceMore
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-				Mod.LoggerInstance.Warning($"Source: {e.Source}");
+                Mod.LoggerInstance.Warning($"Source: {e.Source}");
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
@@ -1480,7 +1493,7 @@ namespace ProduceMore
             catch (Exception e)
             {
                 Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-				Mod.LoggerInstance.Warning($"Source: {e.Source}");
+                Mod.LoggerInstance.Warning($"Source: {e.Source}");
                 Mod.LoggerInstance.Warning($"{e.StackTrace}");
                 return;
             }
@@ -1830,9 +1843,9 @@ namespace ProduceMore
         [HarmonyTargetMethods]
         public static IEnumerable<MethodBase> TargetMethods()
         {
-			yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "UpdateCashDragAmount");
-			yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "StartDragCash");
-			yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "EndCashDrag");
+            yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "UpdateCashDragAmount");
+            yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "StartDragCash");
+            yield return AccessTools.DeclaredMethod(typeof(ItemUIManager), "EndCashDrag");
         }
 
         // Replace all instances of "1000" with our custom stacklimit
