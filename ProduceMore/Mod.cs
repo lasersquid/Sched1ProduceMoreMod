@@ -6,6 +6,7 @@ using System.Reflection;
 
 
 
+
 #if MONO_BUILD
 using ScheduleOne;
 using ScheduleOne.DevUtilities;
@@ -14,6 +15,7 @@ using ScheduleOne.ItemFramework;
 using ScheduleOne.NPCs;
 using ScheduleOne.StationFramework;
 #else
+
 using Il2CppScheduleOne;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
@@ -24,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.2", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -40,7 +42,7 @@ namespace ProduceMore
 			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
 
-			originalStackLimits = new Dictionary<EItemCategory, int>();
+			originalStackLimits = new Dictionary<string, int>();
 			originalStationCapacities = new Dictionary<string, int>();
 			originalStationTimes = new Dictionary<string, int>();
 			originalRecipeTimes = new Dictionary<StationRecipe, int>(unityComparer);
@@ -54,7 +56,7 @@ namespace ProduceMore
 		public HashSet<GridItem> processedStationTimes;
 		public HashSet<ItemDefinition> processedItemDefs;
 		public HashSet<StationRecipe> processedRecipes;
-		public Dictionary<EItemCategory, int> originalStackLimits;
+		public Dictionary<string, int> originalStackLimits;
 		public Dictionary<string, int> originalStationCapacities;
 		public Dictionary<string, int> originalStationTimes;
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
@@ -160,7 +162,7 @@ namespace ProduceMore
 	public class ModSettings
 	{
 		// Stack size settings by category
-		public Dictionary<EItemCategory, int> stackSizes = new Dictionary<EItemCategory, int>();
+		public Dictionary<string, int> stackSizes = new Dictionary<string, int>();
 
 		// Stack size settings by item name
 		public Dictionary<string, int> stackOverrides = new Dictionary<string, int>();
@@ -176,7 +178,7 @@ namespace ProduceMore
 		public float employeeWalkAcceleration;
 
 		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.2";
+		public const string CurrentVersion = "1.0.3";
 		public string version;
 
 		private static bool VersionGreaterThan(string version, string other)
@@ -239,6 +241,18 @@ namespace ProduceMore
 				MelonLogger.Msg($"Updated settings to v1.0.2");
 			}
 
+			// upgrading from 1.0.2 to 1.0.3
+			if (VersionGreaterThan("1.0.3", settings.version))
+			{
+				int agricultureStackSize = settings.stackSizes["Growing"];
+				settings.stackSizes.Remove("Growing");
+				settings.stackSizes.Add("Agriculture", agricultureStackSize);
+				settings.stackSizes.Add("Storage", 10);
+				settings.version = "1.0.3";
+				changed = true;
+				MelonLogger.Msg($"Updated settings to v1.0.3");
+			}
+
 			return changed;
 		}
 
@@ -251,7 +265,7 @@ namespace ProduceMore
                 ModSettings fromFile = JsonConvert.DeserializeObject<ModSettings>(json);
 				ModSettings defaultSettings = new ModSettings();
 
-				foreach (KeyValuePair<EItemCategory, int> entry in defaultSettings.stackSizes)
+				foreach (KeyValuePair<string, int> entry in defaultSettings.stackSizes)
 				{
 					if (!fromFile.stackSizes.ContainsKey(entry.Key))
 					{
@@ -286,8 +300,8 @@ namespace ProduceMore
 
 
                 //Trim malformed entries and do bounds checking
-                var categoriesToRemove = new List<EItemCategory>();
-				foreach (KeyValuePair<EItemCategory, int> entry in fromFile.stackSizes)
+                var categoriesToRemove = new List<string>();
+				foreach (KeyValuePair<string, int> entry in fromFile.stackSizes)
 				{
 					if (!defaultSettings.stackSizes.ContainsKey(entry.Key))
 					{
@@ -303,7 +317,7 @@ namespace ProduceMore
 					}
 				}
 				// there really should be a builtin for set subtraction, but whatevs.
-				foreach (EItemCategory category in categoriesToRemove)
+				foreach (string category in categoriesToRemove)
 				{
 					fromFile.stackSizes.Remove(category);
 				}
@@ -395,21 +409,22 @@ namespace ProduceMore
 		public ModSettings()
 		{
 			// Default stack sizes
-			stackSizes.Add(EItemCategory.Cash, 1000);
-			stackSizes.Add(EItemCategory.Clothing, 1);
-			stackSizes.Add(EItemCategory.Consumable, 20);
-			stackSizes.Add(EItemCategory.Decoration, 1);
-			stackSizes.Add(EItemCategory.Equipment, 10);
-			stackSizes.Add(EItemCategory.Furniture, 10);
-			stackSizes.Add(EItemCategory.Growing, 10);
-			stackSizes.Add(EItemCategory.Ingredient, 20);
-			stackSizes.Add(EItemCategory.Lighting, 10);
-			stackSizes.Add(EItemCategory.Packaging, 20);
-			stackSizes.Add(EItemCategory.Product, 20);
-			stackSizes.Add(EItemCategory.Tools, 1);
+			stackSizes.Add("Agriculture", 10);
+			stackSizes.Add("Cash", 1000);
+			stackSizes.Add("Clothing", 1);
+			stackSizes.Add("Consumable", 20);
+			stackSizes.Add("Decoration", 1);
+			stackSizes.Add("Equipment", 10);
+			stackSizes.Add("Furniture", 10);
+			stackSizes.Add("Ingredient", 20);
+			stackSizes.Add("Lighting", 10);
+			stackSizes.Add("Packaging", 20);
+			stackSizes.Add("Product", 20);
+			stackSizes.Add("Storage", 10);
+			stackSizes.Add("Tools", 1);
 
-			// Default station speed multipliers
-			stationSpeeds.Add("LabOven", 1);
+            // Default station speed multipliers
+            stationSpeeds.Add("LabOven", 1);
 			stationSpeeds.Add("Cauldron", 1);
 			stationSpeeds.Add("BrickPress", 1);
 			stationSpeeds.Add("ChemistryStation", 1);
@@ -449,14 +464,14 @@ namespace ProduceMore
 				EItemCategory category;
 				if (item.Definition.Name == "Speed Grow")
 				{
-					category = EItemCategory.Growing;
+					category = EItemCategory.Agriculture;
 				}
                 else
                 {
 					category = item.Category;
                 }
 
-                if (!stackSizes.TryGetValue(category, out stackLimit))
+                if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
 				{
 					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {category}");
 				}
@@ -474,13 +489,13 @@ namespace ProduceMore
 				EItemCategory category;
 				if (itemDef.Name == "Speed Grow")
 				{
-					category = EItemCategory.Growing;
+					category = EItemCategory.Agriculture;
 				}
                 else
                 {
 					category = itemDef.Category;
                 }
-                if (!stackSizes.TryGetValue(category, out stackLimit))
+                if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
                 {
                     MelonLogger.Msg($"Couldn't find stack size for item {itemDef.Name} with category {category}");
                 }
@@ -498,13 +513,13 @@ namespace ProduceMore
 				EItemCategory actualCategory;
 				if (itemName == "Speed Grow")
 				{
-					actualCategory = EItemCategory.Growing;
+					actualCategory = EItemCategory.Agriculture;
 				}
 				else
 				{
 					actualCategory = category;
 				}
-				if (!stackSizes.TryGetValue(actualCategory, out stackLimit))
+				if (!stackSizes.TryGetValue(actualCategory.ToString(), out stackLimit))
 				{
 					MelonLogger.Msg($"Couldn't find stack size for item {itemName} with category {actualCategory}");
 				}
@@ -516,7 +531,7 @@ namespace ProduceMore
 		{
 			int stackLimit = 10;
 
-			if (!stackSizes.TryGetValue(category, out stackLimit))
+			if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
 			{ 
 				MelonLogger.Msg($"Couldn't find stack size for category {category}");
 			}
@@ -595,6 +610,7 @@ namespace ProduceMore
 // increased batch size for cauldron, laboven, and chemistry station - maybe
 // automatically migrate settings between version updates - done
 // employee walk speed multiplier - done
+// v0.3.6 update
 
 // Testing:
 // IL2CPP:
@@ -624,15 +640,4 @@ namespace ProduceMore
 
 
 // Bugs:
-// - mixers have hard cap of 1s per item -- fixed
-// - in multiplayer, guests can't start cauldrons until full original timer has elapsed -- needs testing
-// - no tag for storage -- beta problem; next ver
-// - mixers don't finish when time hits zero on high multiplier -- fixed
-// - packagers still limited by animation time -- fixed, mostly. they're a lot faster now.
-// - mixing station mk2 limited to mk1 speeds -- fixed
-// - acid, pseudo, and phosphorous have default stacklimit of 20 -- fixed; should probably overhaul original item limit registration
-// - laboven doesn't let you start a batch if any product is in the output -- fixed
-// - cauldron doesn't let you start a batch if any product is in the output -- fixed
-// - employees get stuck behind small gaps at high walk multipliers -- not much I can do; turn the multiplier down or change your layout
-// - poor performance on Mono -- fixed (turns out throwing dozens of exceptions a second is bad for performance)
 

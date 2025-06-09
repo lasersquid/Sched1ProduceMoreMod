@@ -149,7 +149,7 @@ namespace ProduceMore
         // Increase stack limit on item access
         [HarmonyPatch(typeof(ItemInstance), "StackLimit", MethodType.Getter)]
         [HarmonyPrefix]
-        public static void StackLimitPostfix(ItemInstance __instance)
+        public static void StackLimitPrefix(ItemInstance __instance)
         {
             if (!Mod.processedItemDefs.Contains(__instance.Definition) && __instance.Definition.Name.ToLower() != "cash")
             {
@@ -157,16 +157,15 @@ namespace ProduceMore
                 EItemCategory category;
                 if (__instance.Definition.Name == "Speed Grow")
                 {
-                    category = EItemCategory.Growing;
+                    category = EItemCategory.Agriculture;
                 }
                 else
                 {
                     category = __instance.Definition.Category;
                 }
-
-                if (!Mod.originalStackLimits.ContainsKey(category))
+                if (!Mod.originalStackLimits.ContainsKey(category.ToString()))
                 {
-                    Mod.originalStackLimits[category] = __instance.Definition.StackLimit; 
+                    Mod.originalStackLimits[category.ToString()] = __instance.Definition.StackLimit; 
                 }
 
                 int stackLimit = Mod.settings.GetStackLimit(__instance);
@@ -193,16 +192,16 @@ namespace ProduceMore
                     EItemCategory category;
                     if (match.Item.Name == "Speed Grow")
                     {
-                        category = EItemCategory.Growing;
+                        category = EItemCategory.Agriculture;
                     }
                     else
                     {
                         category = match.Item.Category;
                     }
 
-                    if (!Mod.originalStackLimits.ContainsKey(category))
+                    if (!Mod.originalStackLimits.ContainsKey(category.ToString()))
                     {
-                        Mod.originalStackLimits[category] = match.Item.StackLimit;
+                        Mod.originalStackLimits[category.ToString()] = match.Item.StackLimit;
                     }
                     int stackLimit = Mod.settings.GetStackLimit(match.Item);
                     match.Item.StackLimit = stackLimit;
@@ -216,7 +215,7 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void GetCapacityForItemPostfix(ItemSlot __instance, ref int __result, ItemInstance item)
         {
-            if (!__instance.DoesItemMatchFilters(item))
+            if (!__instance.DoesItemMatchHardFilters(item))
             {
                 __result = 0;
                 return;
@@ -240,13 +239,13 @@ namespace ProduceMore
                 {
                     if (itemDef.Name.ToLower() != "cash")
                     {
-                        if (!Mod.originalStackLimits.ContainsKey(itemDef.Category))
+                        if (!Mod.originalStackLimits.ContainsKey(itemDef.Category.ToString()))
                         {
                             itemDef.StackLimit = new ModSettings().GetStackLimit(itemDef);
                         }
                         else
                         {
-                            itemDef.StackLimit = (int)Mod.originalStackLimits[itemDef.Category];
+                            itemDef.StackLimit = (int)Mod.originalStackLimits[itemDef.Category.ToString()];
                         }
                     }
                 }
@@ -301,16 +300,16 @@ namespace ProduceMore
                 EItemCategory category;
                 if (__result.Name == "Speed Grow")
                 {
-                    category = EItemCategory.Growing;
+                    category = EItemCategory.Agriculture;
                 }
                 else
                 {
                     category = __result.Category;
                 }
 
-                if (!Mod.originalStackLimits.ContainsKey(category))
+                if (!Mod.originalStackLimits.ContainsKey(category.ToString()))
                 {
-                    Mod.originalStackLimits[category] = __result.StackLimit; 
+                    Mod.originalStackLimits[category.ToString()] = __result.StackLimit; 
                 }
 
                 int stackLimit = Mod.settings.GetStackLimit(__result);
@@ -368,7 +367,10 @@ namespace ProduceMore
                 Mod.processedStationCapacities.Add(__instance);
             }
 
-            __result = __instance.GetTotalDryingItems() < __instance.ItemCapacity && __instance.InputSlot.Quantity != 0 && !__instance.InputSlot.IsLocked && !__instance.InputSlot.IsRemovalLocked;
+            __result = __instance.GetTotalDryingItems() < __instance.ItemCapacity &&
+                __instance.InputSlot.Quantity != 0 && 
+                !__instance.InputSlot.IsLocked && 
+                !__instance.InputSlot.IsRemovalLocked;
 
             return false;
         }
@@ -579,7 +581,7 @@ namespace ProduceMore
             // for some reason calling getcapacity here doesn't result in our postfix running
             // parent function might be overridden in child classes maybe?
             // for now just inline body of getcapacity
-            if (!__instance.Oven.OutputSlot.DoesItemMatchFilters(productInstance))
+            if (!__instance.Oven.OutputSlot.DoesItemMatchHardFilters(productInstance))
             {
                 capacity = 0;
             }
@@ -895,9 +897,15 @@ namespace ProduceMore
 
         [HarmonyPatch(typeof(Chemist), "GetMixStationsReadyToMove")]
         [HarmonyPrefix]
+#if MONO_BUILD
         public static bool GetMixStationsReadyToMovePrefix(Chemist __instance, ref List<MixingStation> __result)
         {
-            List<MixingStation> list = new List<MixingStation>();
+            var list = new List<MixingStation>();
+#else
+        public static bool GetMixStationsReadyToMovePrefix(Chemist __instance, ref Il2CppSystem.Collections.Generic.List<MixingStation> __result)
+        { 
+            var list = new Il2CppSystem.Collections.Generic.List<MixingStation>();
+#endif
 
             foreach (MixingStation mixingStation in CastTo<ChemistConfiguration>(GetProperty(typeof(Chemist), "configuration", __instance)).MixStations)
             {
@@ -923,6 +931,7 @@ namespace ProduceMore
                     }
                 }
             }
+
             __result = list;
 
             return false;
@@ -1060,6 +1069,8 @@ namespace ProduceMore
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
             float mixTime = (float)mixQuantity / stationSpeed;
             // waiting for more than a second or two at a time is a bad idea.
+            // waiting for less than 20ms is also a bad idea.
+            // just yield every second for a happy medium.
             for (int i = 0; i < mixTime; ++i)
             {
                 yield return new WaitForSeconds(1f);
@@ -1261,7 +1272,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
         {
-            int cauldronCapacity = Mod.settings.GetStackLimit("Coca Leaf", EItemCategory.Growing);
+            int cauldronCapacity = Mod.settings.GetStackLimit("Coca Leaf", EItemCategory.Agriculture);
             ItemInstance itemInstance;
             int num;
             ItemInstance itemInstance2;
@@ -2096,7 +2107,7 @@ namespace ProduceMore
 
             __instance.CashSlotHintAnim.Stop();
             __instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
-            if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
+            if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchHardFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
             {
                 if ((__instance.HoveredSlot.assignedSlot.TryCast<HotbarSlot> != null) && (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot> == null))
                 {

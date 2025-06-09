@@ -15,6 +15,8 @@ Supports modifying the batch size of:
  - Drying rack
  - Packaging station
 
+Supports modifying the mixing station start threshold up to the batch limit.
+
 Supports modifying stack size of every item in the game by category, with overrides for individual items. This includes cash!
 
 Supports accelerated employee work animations. This means if you want to hang up 1000 leaves, you don't have to wait 15+ minutes for your botanist.
