@@ -7,6 +7,13 @@ using MelonLoader;
 using Unity.Jobs.LowLevel.Unsafe;
 using System.Runtime.CompilerServices;
 using System.Collections;
+using UnityEngine.Events;
+
+
+
+
+
+
 
 
 
@@ -20,10 +27,12 @@ using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Management;
+using ScheduleOne.Money;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
 using ScheduleOne.Product;
+using ScheduleOne.Product.Packaging;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Management;
@@ -35,6 +44,7 @@ using ScheduleOne.Variables;
 using ScheduleOne;
 #else
 using Il2CppFishNet;
+using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
@@ -50,6 +60,7 @@ using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product;
+using Il2CppScheduleOne.Product.Packaging;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI.Management;
@@ -94,6 +105,12 @@ namespace ProduceMore
         public static void SetProperty(Type type, string fieldName, object target, object value)
         {
             AccessTools.Property(type, fieldName).SetValue(target, value);
+        }
+
+
+        public static object CallMethod(Type type, string methodName, object target, object[] args)
+        {
+            return AccessTools.Method(type, methodName).Invoke(target, args);
         }
 
         public static void SetMod(ProduceMoreMod mod)
@@ -165,7 +182,7 @@ namespace ProduceMore
                 }
                 if (!Mod.originalStackLimits.ContainsKey(category.ToString()))
                 {
-                    Mod.originalStackLimits[category.ToString()] = __instance.Definition.StackLimit; 
+                    Mod.originalStackLimits[category.ToString()] = __instance.Definition.StackLimit;
                 }
 
                 int stackLimit = Mod.settings.GetStackLimit(__instance);
@@ -213,9 +230,14 @@ namespace ProduceMore
         // update item slots to report accurate capacity
         [HarmonyPatch(typeof(ItemSlot), "GetCapacityForItem")]
         [HarmonyPostfix]
-        public static void GetCapacityForItemPostfix(ItemSlot __instance, ref int __result, ItemInstance item)
+        public static void GetCapacityForItemPostfix(ItemSlot __instance, ref int __result, ItemInstance item, bool checkPlayerFilters)
         {
             if (!__instance.DoesItemMatchHardFilters(item))
+            {
+                __result = 0;
+                return;
+            }
+            if (checkPlayerFilters && !__instance.DoesItemMatchPlayerFilters(item))
             {
                 __result = 0;
                 return;
@@ -228,7 +250,6 @@ namespace ProduceMore
             __result = 0;
             return;
         }
-
 
 
         public static new void RestoreDefaults()
@@ -258,6 +279,7 @@ namespace ProduceMore
                 return;
             }
         }
+
     }
 
     // This patch requires its own class since we need a TargetMethod method to select
@@ -329,6 +351,235 @@ namespace ProduceMore
         }
     }
 
+
+    [HarmonyPatch]
+    public class ShopPatches : Sched1PatchesBase
+    {
+
+        // allow user to enter values up to 999999
+        [HarmonyPatch(typeof(ShopAmountSelector), "OnValueChanged")]
+        [HarmonyPrefix]
+        public static bool OnValueChangedPrefix(ShopAmountSelector __instance, string value)
+        {
+            int value2;
+            if (int.TryParse(value, out value2))
+            {
+                SetProperty(typeof(ShopAmountSelector), "SelectedAmount", __instance, Mathf.Clamp(value2, 1, 999999));
+                __instance.InputField.SetTextWithoutNotify(__instance.SelectedAmount.ToString());
+                return false;
+            }
+            SetProperty(typeof(ShopAmountSelector), "SelectedAmount", __instance, 1);
+            __instance.InputField.SetTextWithoutNotify(string.Empty);
+
+            return false;
+        }
+
+        // Call to OnValueChanged probably optimized out
+        [HarmonyPatch(typeof(ShopAmountSelector), "OnSubmitted")]
+        [HarmonyPrefix]
+        public static bool OnSubmittedPrefix(ShopAmountSelector __instance, string value)
+        {
+            if (!__instance.IsOpen)
+            {
+                return false;
+            }
+            CallMethod(typeof(ShopAmountSelector), "OnValueChanged", __instance, [value]);
+            if (__instance.onSubmitted != null)
+            {
+                __instance.onSubmitted.Invoke(__instance.SelectedAmount);
+            }
+            __instance.Close();
+
+            return false;
+        }
+
+        // Modify shop amount selector size so user can enter large numbers
+        [HarmonyPatch(typeof(ShopAmountSelector), "Open")]
+        [HarmonyPrefix]
+        public static void OpenPrefix(ShopAmountSelector __instance)
+        {
+            if (__instance.InputField.characterLimit != 6)
+            {
+                __instance.InputField.characterLimit = 6;
+                __instance.InputField.pointSize -= 2;
+                float width = __instance.Container.rect.width * 1.5f;
+                __instance.Container.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            }
+        }
+
+
+        // make cart entry red X actually remove the entire stack
+        [HarmonyPatch(typeof(CartEntry), "Initialize")]
+        [HarmonyPrefix]
+        public static bool CartEntryInitializePrefix(CartEntry __instance, Cart cart, ShopListing listing, int quantity)
+        {
+            SetProperty(typeof(CartEntry), "Cart", __instance, cart);
+            SetProperty(typeof(CartEntry), "Listing", __instance, listing);
+            SetProperty(typeof(CartEntry), "Quantity", __instance, quantity);
+
+#if MONO_BUILD
+            __instance.IncrementButton.onClick.AddListener(() =>
+            {
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
+            });
+            __instance.DecrementButton.onClick.AddListener(() =>
+            { 
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
+            });
+            __instance.RemoveButton.onClick.AddListener(() =>
+            {
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
+            });
+#else
+            __instance.IncrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
+            {
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
+            }));
+            __instance.DecrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
+            { 
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
+            }));
+            __instance.RemoveButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
+            {
+                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
+            }));
+#endif
+
+            CallMethod(typeof(CartEntry), "UpdateTitle", __instance, []);
+            CallMethod(typeof(CartEntry), "UpdatePrice", __instance, []);
+
+            return false;
+        }
+
+
+        // Enable user to input more than 999 in delivery app
+        // call to OnQuantityInputSubmitted was inlined as well
+        [HarmonyPatch(typeof(ListingEntry), "Initialize")]
+        [HarmonyPrefix]
+        public static bool ListingEntryInitializePrefix(ListingEntry __instance, ShopListing match)
+        {
+            SetProperty(typeof(ListingEntry), "MatchingListing", __instance, match);
+            __instance.Icon.sprite = __instance.MatchingListing.Item.Icon;
+            __instance.ItemNameLabel.text = __instance.MatchingListing.Item.Name;
+            __instance.ItemPriceLabel.text = MoneyManager.FormatAmount(__instance.MatchingListing.Price, false, false);
+#if MONO_BUILD
+            __instance.QuantityInput.onSubmit.AddListener( (string value) =>
+            {
+                CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
+            });
+            __instance.QuantityInput.onEndEdit.AddListener( (string value) =>
+            {
+                CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
+            });
+            __instance.IncrementButton.onClick.AddListener( () =>
+            {
+                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
+            });
+            __instance.DecrementButton.onClick.AddListener( () =>
+            {
+                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
+            });
+#else
+
+            __instance.QuantityInput.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityAction<string>>( (string value) =>
+            {
+                CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
+            }));
+            __instance.QuantityInput.onEndEdit.AddListener(DelegateSupport.ConvertDelegate<UnityAction<string>>( (string value) =>
+            {
+                CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
+            }));
+            __instance.IncrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>( () =>
+            {
+                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
+            }));
+            __instance.DecrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>( () =>
+            {
+                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
+            }));
+
+#endif
+            __instance.QuantityInput.SetTextWithoutNotify(__instance.SelectedQuantity.ToString());
+            __instance.RefreshLocked();
+
+            if (__instance.QuantityInput.characterLimit != 6)
+            {
+                __instance.QuantityInput.characterLimit = 6;
+                __instance.QuantityInput.textComponent.fontSize = 16;
+                CastTo<RectTransform>(__instance.QuantityInput.transform).sizeDelta = new Vector2(80, 40);
+            }
+
+            return false;
+        }
+
+        // Allow user to purchase more than 999 items at a time from phone app
+        [HarmonyPatch(typeof(ListingEntry), "SetQuantity")]
+        [HarmonyPrefix]
+        public static bool SetQuantityPrefix(ListingEntry __instance, int quant, bool notify)
+        {
+            if (!__instance.MatchingListing.Item.IsPurchasable)
+            {
+                quant = 0;
+            }
+            SetProperty(typeof(ListingEntry), "SelectedQuantity", __instance, Mathf.Clamp(quant, 0, 999999));
+            __instance.QuantityInput.SetTextWithoutNotify(__instance.SelectedQuantity.ToString());
+            if (notify && __instance.onQuantityChanged != null)
+            {
+                __instance.onQuantityChanged.Invoke();
+            }
+
+            return false;
+        }
+
+
+        // Call to SetQuantity probably optimized out
+        [HarmonyPatch(typeof(ListingEntry), "OnQuantityInputSubmitted")]
+        [HarmonyPrefix]
+        public static bool OnQuantityInputSubmittedPrefix(ListingEntry __instance, string value)
+        {
+            int quant;
+            if (int.TryParse(value, out quant))
+            {
+                __instance.SetQuantity(quant, true);
+                return false;
+            }
+            __instance.SetQuantity(0, true);
+
+            return false;
+        }
+
+
+        // Call to SetQuantity probably optimized out
+        [HarmonyPatch(typeof(ListingEntry), "ChangeQuantity")]
+        [HarmonyPrefix]
+        public static bool ChangeQuantityPrefix(ListingEntry __instance, int change)
+        {
+            __instance.SetQuantity(__instance.SelectedQuantity + change, true);
+
+            return false;
+        }
+
+        // call to OnQuantityInputSubmitted probably optimized out
+        [HarmonyPatch(typeof(ListingEntry), "ValidateInput")]
+        [HarmonyPrefix]
+        public static bool ValidateInputPrefix(ListingEntry __instance)
+        {
+            CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [__instance.QuantityInput.text]);
+            return false;
+        }
+
+
+
+
+        public static new void RestoreDefaults()
+        {
+            // no game objects to restore
+        }
+    }
+
+
+
+
     // Patch drying rack capacity and speed
     [HarmonyPatch]
     public class DryingRackPatches : Sched1PatchesBase
@@ -383,7 +634,8 @@ namespace ProduceMore
         {
             if (!Mod.originalStationTimes.ContainsKey("DryingRack"))
             {
-                Mod.originalStationTimes["DryingRack"] = 720; //replace with constant from class when there is one accessible
+                Mod.originalStationTimes["DryingRack"] = DryingRack.DRY_MINS_PER_TIER;
+               
             }
 
             float stationSpeed =  Mod.settings.enableStationAnimationAcceleration ? (float)Mod.originalStationTimes["DryingRack"] / Mod.settings.GetStationSpeed("DryingRack") : Mod.originalStationTimes["DryingRack"];
@@ -406,7 +658,7 @@ namespace ProduceMore
         {
             if (!Mod.originalStationTimes.ContainsKey("DryingRack"))
             {
-                Mod.originalStationTimes["DryingRack"] = 720; //replace with constant from class once one is available
+                Mod.originalStationTimes["DryingRack"] = DryingRack.DRY_MINS_PER_TIER;
             }
             int dryingTime = (int)((float)Mod.originalStationTimes["DryingRack"] / Mod.settings.GetStationSpeed("DryingRack"));
 
@@ -425,9 +677,8 @@ namespace ProduceMore
         {
             if (!Mod.originalStationTimes.ContainsKey("DryingRack"))
             {
-                Mod.originalStationTimes["DryingRack"] = 720; //replace with constant from class once one is available
+                Mod.originalStationTimes["DryingRack"] = DryingRack.DRY_MINS_PER_TIER;
             }
-
             if (__instance == null)
             {
                 return false;
@@ -1451,19 +1702,6 @@ namespace ProduceMore
     [HarmonyPatch]
     public class PackagingStationPatches : Sched1PatchesBase
     {
-        // speed
-        [HarmonyPatch(typeof(PackagingStationBehaviour), "BeginPackaging")]
-        [HarmonyPrefix]
-        public static void BeginPackagingPrefix(PackagingStationBehaviour __instance)
-        {
-            if (!Mod.processedStationSpeeds.Contains(__instance.Station))
-            {
-                float stationSpeed = Mod.settings.GetStationSpeed("PackagingStation");
-                __instance.Station.PackagerEmployeeSpeedMultiplier = stationSpeed;
-                Mod.processedStationSpeeds.Add(__instance.Station);
-            }
-        }
-
         // call our own packaging coroutine to reduce animation time
         [HarmonyPatch(typeof(PackagingStationBehaviour), "RpcLogic___BeginPackaging_2166136261")]
         [HarmonyPrefix]
@@ -1473,9 +1711,9 @@ namespace ProduceMore
             {
                 return false;
             }
-            
+
             AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress").Invoke(__instance, [true]);
-            __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f / Mod.settings.GetStationSpeed("PackagingStation"));
+            __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f);
             object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
             SetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance, (Coroutine)packagingCoroutine);
 
@@ -1487,25 +1725,45 @@ namespace ProduceMore
         {
             yield return new WaitForEndOfFrame();
             behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", true);
-            float packageTime = 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier);
-            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+
+            //TODO: check if not destroying the copy leaks memory
+            ItemInstance packagedInstance = behaviour.Station.ProductSlot.ItemInstance.GetCopy(1);
+            CastTo<ProductItemInstance>(packagedInstance).SetPackaging(CastTo<PackagingDefinition>(behaviour.Station.PackagingSlot.ItemInstance.Definition));
+            int outputSpace = behaviour.Station.OutputSlot.GetCapacityForItem(packagedInstance);
+            int productPerPackage = CastTo<PackagingDefinition>(behaviour.Station.PackagingSlot.ItemInstance.Definition).Quantity;
+            int availableToPackage = Mathf.Min(behaviour.Station.InputSlots[0].Quantity, behaviour.Station.PackagingSlot.Quantity);
+            int numPackages = Mathf.Min(availableToPackage / productPerPackage, outputSpace);
+            float packageTime = (float)numPackages * 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier * Mod.settings.stationSpeeds["PackagingStation"]);
+            for (float i = 0f; i < packageTime; i++)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
-                yield return new WaitForEndOfFrame();
-            }
-            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
-            if (InstanceFinder.IsServer)
-            {
-                behaviour.Station.PackSingleInstance();
+                yield return new WaitForSeconds(1f);
             }
 
+            if (InstanceFinder.IsServer)
+            {
+                float value = NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("PackagedProductCount");
+                NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("PackagedProductCount", (value + numPackages * productPerPackage).ToString(), true);
+                if (behaviour.Station.OutputSlot.ItemInstance == null)
+                {
+                    behaviour.Station.OutputSlot.SetStoredItem(packagedInstance, false);
+                    behaviour.Station.OutputSlot.SetQuantity(numPackages);
+                }
+                else
+                {
+                    behaviour.Station.OutputSlot.ChangeQuantity(numPackages, false);
+                }
+                behaviour.Station.PackagingSlot.ChangeQuantity(-numPackages, false);
+                behaviour.Station.ProductSlot.ChangeQuantity(-numPackages * productPerPackage, false);
+            }
+
+            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
             AccessTools.PropertySetter(typeof(PackagingStationBehaviour), "PackagingInProgress").Invoke(behaviour, [false]);
             SetField(typeof(PackagingStationBehaviour), "packagingRoutine", behaviour, null);
             yield break;
-
         }
 
-
+        // stop our coroutine cleanly
         [HarmonyPatch(typeof(PackagingStationBehaviour), "StopPackaging")]
         [HarmonyPrefix]
         public static bool StopPackagingPrefix(PackagingStationBehaviour __instance)
@@ -1527,25 +1785,9 @@ namespace ProduceMore
 
         public static new void RestoreDefaults()
         {
-            try
-            {
-                foreach (var station in Mod.processedStationSpeeds)
-                {
-                    PackagingStation packagingStation = CastTo<PackagingStation>(station);
-                    if (packagingStation != null)
-                    {
-                        packagingStation.PackagerEmployeeSpeedMultiplier = 1;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Mod.LoggerInstance.Warning($"Couldn't restore defaults for {MethodBase.GetCurrentMethod().DeclaringType.Name}: {e.GetType().Name} - {e.Message}");
-                Mod.LoggerInstance.Warning($"Source: {e.Source}");
-                Mod.LoggerInstance.Warning($"{e.StackTrace}");
-                return;
-            }
+            // no game objects modified
         }
+
     }
 
 
@@ -1641,6 +1883,7 @@ namespace ProduceMore
                 __instance.Npc.SetEquippable_Networked(null, string.Empty);
                 SetField(typeof(PotActionBehaviour), "currentActionEquippable", __instance, null);
             }
+
             string currentActionAnimation = CastTo<string>(GetField(typeof(PotActionBehaviour), "currentActionAnimation", __instance));
             if (currentActionAnimation != string.Empty)
             {

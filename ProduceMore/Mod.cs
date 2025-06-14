@@ -184,7 +184,7 @@ namespace ProduceMore
 		private static bool VersionGreaterThan(string version, string other)
 		{
 			// if other is null, empty string, or malformed, return true
-			if (other == null || other.Split(['.']).Count() != 3)
+			if (other == null)
 			{
 				return true;
 			}
@@ -194,7 +194,7 @@ namespace ProduceMore
 			int versionMinor = Convert.ToInt32(versionStrings[1]);
 			int versionPatch = Convert.ToInt32(versionStrings[2]);
 
-			string[] otherStrings = version.Split(['.']);
+			string[] otherStrings = other.Split(['.']);
 			int otherMajor = Convert.ToInt32(otherStrings[0]);
 			int otherMinor = Convert.ToInt32(otherStrings[1]);
 			int otherPatch = Convert.ToInt32(otherStrings[2]);
@@ -222,6 +222,7 @@ namespace ProduceMore
 		public static bool UpdateSettings(ModSettings settings)
 		{
 			bool changed = false;
+			MelonLogger.Msg($"found settings version: {settings.version}");
 
 			if (VersionGreaterThan("1.0.2", settings.version))
 			{
@@ -244,10 +245,18 @@ namespace ProduceMore
 			// upgrading from 1.0.2 to 1.0.3
 			if (VersionGreaterThan("1.0.3", settings.version))
 			{
-				int agricultureStackSize = settings.stackSizes["Growing"];
-				settings.stackSizes.Remove("Growing");
-				settings.stackSizes.Add("Agriculture", agricultureStackSize);
-				settings.stackSizes.Add("Storage", 10);
+				int agricultureStackSize = 10;
+				if (settings.stackSizes.ContainsKey("Growing"))
+				{
+					agricultureStackSize = settings.stackSizes["Growing"];
+					settings.stackSizes.Remove("Growing");
+				}
+				else
+				{
+					agricultureStackSize = 10;
+				}
+				settings.stackSizes.TryAdd("Agriculture", agricultureStackSize);
+				settings.stackSizes.TryAdd("Storage", 10);
 				settings.version = "1.0.3";
 				changed = true;
 				MelonLogger.Msg($"Updated settings to v1.0.3");
@@ -538,6 +547,24 @@ namespace ProduceMore
 			return stackLimit;
 		}
 
+
+		public int GetLargestStackLimit()
+		{
+			int largest = 0;
+			foreach(int size in stackSizes.Values)
+			{
+				if (size > largest)
+					largest = size;
+			}
+			foreach (int size in stackOverrides.Values)
+			{
+				if (size > largest)
+					largest = size;
+			}
+
+			return largest;
+		}
+
 		public int GetStationCapacity(string station)
 		{
 			int capacity = 10;
@@ -610,7 +637,8 @@ namespace ProduceMore
 // increased batch size for cauldron, laboven, and chemistry station - maybe
 // automatically migrate settings between version updates - done
 // employee walk speed multiplier - done
-// v0.3.6 update
+// v0.3.6 update - done
+// increase size of shop item quantity text box
 
 // Testing:
 // IL2CPP:
@@ -640,4 +668,5 @@ namespace ProduceMore
 
 
 // Bugs:
-
+// - handlers don't follow user filters on stations -- fixed
+// - packaging is still really slow -- fixed
