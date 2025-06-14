@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.3", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.4", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -178,7 +178,7 @@ namespace ProduceMore
 		public float employeeWalkAcceleration;
 
 		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.3";
+		public const string CurrentVersion = "1.0.4";
 		public string version;
 
 		private static bool VersionGreaterThan(string version, string other)
@@ -222,7 +222,6 @@ namespace ProduceMore
 		public static bool UpdateSettings(ModSettings settings)
 		{
 			bool changed = false;
-			MelonLogger.Msg($"found settings version: {settings.version}");
 
 			if (VersionGreaterThan("1.0.2", settings.version))
 			{
@@ -260,6 +259,13 @@ namespace ProduceMore
 				settings.version = "1.0.3";
 				changed = true;
 				MelonLogger.Msg($"Updated settings to v1.0.3");
+			}
+
+			if (VersionGreaterThan("1.0.4", settings.version))
+			{
+				settings.version = "1.0.4";
+				changed = true;
+				MelonLogger.Msg($"Updated settings to v1.0.4");
 			}
 
 			return changed;
@@ -638,11 +644,14 @@ namespace ProduceMore
 // automatically migrate settings between version updates - done
 // employee walk speed multiplier - done
 // v0.3.6 update - done
-// increase size of shop item quantity text box
+// increase size of shop item quantity text box - done
+// increase purchase limit in shops to 999999 - done
 
 // Testing:
 // IL2CPP:
 //		ItemInstancePatches - working
+//		RegistryPatches - working
+//		ShopPatches - working
 //		ChemistryStationPatches - working
 //		DryingRackPatches - working
 //		LabOvenPatches - working
@@ -655,9 +664,11 @@ namespace ProduceMore
 //		NPCMovementPatches - needs testing
 // Mono:
 //		ItemInstancePatches - working
+//		RegistryPatches - working
+//		ShopPatches - working
 //		ChemistryStationPatches - working
 //		DryingRackPatches - working
-//		LabOvenPatches - speed works, employee acceleration works
+//		LabOvenPatches - working
 //		MixingStationPatches - working
 //		BrickPressPatches - working
 //		CauldronPatches - working
@@ -670,3 +681,4 @@ namespace ProduceMore
 // Bugs:
 // - handlers don't follow user filters on stations -- fixed
 // - packaging is still really slow -- fixed
+// - mixer acceleration not working -- fixed
