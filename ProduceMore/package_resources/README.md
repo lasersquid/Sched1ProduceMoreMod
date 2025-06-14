@@ -1,6 +1,6 @@
 # ProduceMore
 
-Tired of waiting 8 hours for lab ovens? Configure the speed of every station in the game, and stack sizes too. Now featuring configurable employee animation speed and walk speed.
+Tired of waiting 8 hours for lab ovens? Configure station speed, employee work animation speed, stack limits, and more.
 
 This mod is for anyone who wants to accelerate their production. Or if you like a more leisurely playthrough, you can also slow things down.
 
@@ -23,6 +23,8 @@ Supports accelerated employee work animations. This means if you want to hang up
 
 Supports accelerated employee walk speed.
 
+Supports buying up to 999999 items at a time from shops and the delivery app.
+
 
 ## Configuration
 
@@ -32,7 +34,7 @@ The mod should automatically detect old settings files and update them to the ne
 
 Setting employee walk speed too high may result in pathfinding issues. If your employees have trouble navigating tight spaces, consider turning down the multiplier.
 
-The degree of animation acceleration is determined by the corresponding station speed setting, once the setting is enabled.
+The employee work animation speed is determined by the corresponding station speed setting, but employee animation acceleration must be enabled first.
 
 
 ## Compatibility

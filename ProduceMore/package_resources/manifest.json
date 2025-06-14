@@ -2,7 +2,7 @@
     "name": "ProduceMore%%ARCH%%",
     "version_number": "%%VERSION%%",
     "website_url": "https://github.com/lasersquid/Sched1ProduceMoreMod",
-    "description": "Configure the speed of almost every station in the game, and stack sizes too. Now featuring employee animation and walk speed acceleration.",
+    "description": "Configure station speed, employee work animation speed, stack limits, and more.",
     "dependencies": [
 	"LavaGang-MelonLoader-0.7.0"
     ]
