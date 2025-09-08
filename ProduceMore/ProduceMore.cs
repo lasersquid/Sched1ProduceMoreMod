@@ -701,7 +701,7 @@ namespace ProduceMore
             while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
             {
                 behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
-                yield return new WaitForSeconds(Mathf.Min(0.5f, 1f / stationSpeed));
+                yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
                 int num = itemCount;
                 itemCount = num + 1;
             }
@@ -844,8 +844,8 @@ namespace ProduceMore
         {
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("LabOven") : 1f;
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
-            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
-            yield return new WaitForSeconds(Mathf.Min(0.5f, 0.5f / stationSpeed));
+            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             if (!(bool)CallMethod(typeof(StartLabOvenBehaviour), "CanCookStart", behaviour, []))
             {
@@ -856,13 +856,13 @@ namespace ProduceMore
 
             // halp
             behaviour.targetOven.Door.SetPosition(1f);
-            yield return new WaitForSeconds(Mathf.Min(0.5f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             behaviour.targetOven.WireTray.SetPosition(1f);
-            yield return new WaitForSeconds(Mathf.Min(0.5f, 5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 5f / stationSpeed));
 
             behaviour.targetOven.Door.SetPosition(0f);
-            yield return new WaitForSeconds(Mathf.Min(0.5f, 1f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
 
             ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
             if (itemInstance == null)
@@ -935,8 +935,8 @@ namespace ProduceMore
         {
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("LabOven") : 1f;
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
-            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
-            yield return new WaitForSeconds(0.5f);
+            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             if (!(bool)CallMethod(typeof(FinishLabOvenBehaviour), "CanActionStart", behaviour, []))
             {
@@ -948,21 +948,21 @@ namespace ProduceMore
             behaviour.Npc.SetEquippable_Networked(null, "Avatar/Equippables/Hammer");
             behaviour.targetOven.Door.SetPosition(1f);
             behaviour.targetOven.WireTray.SetPosition(1f);
-            yield return new WaitForSeconds(0.5f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             behaviour.targetOven.SquareTray.SetParent(behaviour.targetOven.transform);
             behaviour.targetOven.RemoveTrayAnimation.Play();
             yield return new WaitForSeconds(0.1f);
 
             behaviour.targetOven.Door.SetPosition(0f);
-            yield return new WaitForSeconds(1f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
 
             behaviour.Npc.SetAnimationBool_Networked(null, "UseHammer", true);
-            yield return new WaitForSeconds(10f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 10f / stationSpeed));
 
             behaviour.Npc.SetAnimationBool_Networked(null, "UseHammer", false);
             behaviour.targetOven.Shatter(behaviour.targetOven.CurrentOperation.Cookable.ProductQuantity, behaviour.targetOven.CurrentOperation.Cookable.ProductShardPrefab.gameObject);
-            yield return new WaitForSeconds(1f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
             
             ItemInstance productItem = behaviour.targetOven.CurrentOperation.GetProductItem(behaviour.targetOven.CurrentOperation.Cookable.ProductQuantity * behaviour.targetOven.CurrentOperation.IngredientQuantity);
             behaviour.targetOven.OutputSlot.AddItem(productItem, false);
@@ -1275,8 +1275,8 @@ namespace ProduceMore
                 stationSpeed = Mod.settings.GetStationSpeed("MixingStation");
             }
 
-            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
-            yield return new WaitForSeconds(0.5f);
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             if (!(bool)CallMethod(typeof(StartMixingStationBehaviour), "CanCookStart", behaviour, []))
             {
@@ -1290,7 +1290,7 @@ namespace ProduceMore
             QualityItemInstance product = CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
             ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
-            float mixTime = (float)mixQuantity / stationSpeed;
+            float mixTime = Mathf.Max(0.1f, (float)mixQuantity / stationSpeed);
             // waiting for more than a second or two at a time is a bad idea.
             // waiting for less than 20ms is also a bad idea.
             // just yield every second for a happy medium.
@@ -1461,11 +1461,11 @@ namespace ProduceMore
             }
 
             behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.2f / stationSpeed));
 
             behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
             behaviour.Press.PlayPressAnim();
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
 
             ProductItemInstance product;
             if (InstanceFinder.IsServer && behaviour.Press.HasSufficientProduct(out product))
@@ -1596,7 +1596,7 @@ namespace ProduceMore
         {
             yield return new WaitForEndOfFrame();
             behaviour.Npc.Avatar.Anim.SetBool("UseChemistryStation", true);
-            float packageTime = 15f / Mod.settings.GetStationSpeed("Cauldron");
+            float packageTime = Mathf.Max(0.1f, 15f / Mod.settings.GetStationSpeed("Cauldron"));
             for (float i = 0f; i < packageTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.LinkOrigin.position, 0, false);
@@ -1703,7 +1703,7 @@ namespace ProduceMore
             int productPerPackage = CastTo<PackagingDefinition>(behaviour.Station.PackagingSlot.ItemInstance.Definition).Quantity;
             int availableToPackage = Mathf.Min(behaviour.Station.ProductSlot.Quantity, behaviour.Station.PackagingSlot.Quantity);
             int numPackages = Mathf.Min(availableToPackage / productPerPackage, outputSpace);
-            float packageTime = (float)numPackages * 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier * Mod.settings.stationSpeeds["PackagingStation"]);
+            float packageTime = Mathf.Max(0.1f, (float)numPackages * 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier * Mod.settings.stationSpeeds["PackagingStation"]));
 
             //Log($"Have {behaviour.Station.ProductSlot.Quantity} product in input slot, {behaviour.Station.PackagingSlot.Quantity} {behaviour.Station.PackagingSlot.ItemInstance.Definition.Name} in packaging slot, and {behaviour.Station.OutputSlot.Quantity} packaged product in the output.");
             //Log($"Have {outputSpace} output space, {availableToPackage} product to package at {productPerPackage} product per package. Will make {numPackages} packages in {packageTime} seconds.");
@@ -1804,7 +1804,7 @@ namespace ProduceMore
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("Pot") : 1f;
 
             behaviour.AssignedPot.SetNPCUser(CastTo<Botanist>(GetField(typeof(PotActionBehaviour), "botanist", behaviour)).NetworkObject);
-            behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, 0.5f);
+            behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, Mathf.Max(0.1f, 0.5f  stationSpeed));
             
             string actionAnimation = (string)CallMethod(typeof(PotActionBehaviour), "GetActionAnimation", behaviour, [behaviour.CurrentActionType]);
             if (actionAnimation != string.Empty)
@@ -1823,7 +1823,7 @@ namespace ProduceMore
                 SetField(typeof(PotActionBehaviour), "currentActionEquippable", behaviour, behaviour.Npc.SetEquippable_Networked_Return(null, actionEquippable.AssetPath));
             }
             
-            float waitTime = behaviour.GetWaitTime(behaviour.CurrentActionType) / stationSpeed;
+            float waitTime = Mathf.Max(0.1f, behaviour.GetWaitTime(behaviour.CurrentActionType) / stationSpeed);
             for (float i = 0f; i < waitTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.AssignedPot.transform.position, 0, false);
@@ -1997,8 +1997,8 @@ namespace ProduceMore
         private static IEnumerator StartCookRoutine(StartChemistryStationBehaviour behaviour)
         {
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("ChemistryStation") : 1f;
-            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, 0.5f);
-            yield return new WaitForSeconds(0.5f);
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
 
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
             if (!(bool)CallMethod(typeof(StartChemistryStationBehaviour), "CanCookStart", behaviour, []))
@@ -2011,11 +2011,11 @@ namespace ProduceMore
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
             StationRecipe recipe = (CastTo<ChemistryStationConfiguration>(behaviour.targetStation.Configuration)).Recipe.SelectedRecipe;
             CallMethod(typeof(StartChemistryStationBehaviour), "SetupBeaker", behaviour, []);
-            yield return new WaitForSeconds(1f / stationSpeed);
-            
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
+
             Beaker beaker = CastTo<Beaker>(GetField(typeof(StartChemistryStationBehaviour), "beaker", behaviour));
             CallMethod(typeof(StartChemistryStationBehaviour), "FillBeaker", behaviour, [recipe, beaker]);
-            yield return new WaitForSeconds(20f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 20f / stationSpeed));
 
 #if MONO_BUILD
             var list = new List<ItemInstance>();
