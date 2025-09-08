@@ -1,27 +1,17 @@
 ﻿using HarmonyLib;
-using System.Reflection;
-using UnityEngine;
-using System.Reflection.Emit;
 using MelonLoader;
-
-using Unity.Jobs.LowLevel.Unsafe;
-using System.Runtime.CompilerServices;
 using System.Collections;
+using System.Reflection;
+using System.Reflection.Emit;
+using UnityEngine;
 using UnityEngine.Events;
-
-
-
-
-
-
-
-
 
 
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.DevUtilities;
+using ScheduleOne.Dialogue;
 using ScheduleOne.Employees;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
@@ -31,6 +21,7 @@ using ScheduleOne.Money;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.ObjectScripts;
+using ScheduleOne.PlayerScripts;
 using ScheduleOne.Product;
 using ScheduleOne.Product.Packaging;
 using ScheduleOne.StationFramework;
@@ -49,6 +40,7 @@ using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
@@ -108,7 +100,6 @@ namespace ProduceMore
             AccessTools.Property(type, fieldName).SetValue(target, value);
         }
 
-
         public static object CallMethod(Type type, string methodName, object target, object[] args)
         {
             return AccessTools.Method(type, methodName).Invoke(target, args);
@@ -147,6 +138,24 @@ namespace ProduceMore
             return o.TryCast<T>() != null;
         }
 #endif
+
+        public static UnityAction ToUnityAction(Action action)
+        {
+#if MONO_BUILD
+            return new UnityAction(action);
+#else
+            return DelegateSupport.ConvertDelegate<UnityAction>(action);
+#endif
+        }
+
+        public static UnityAction<T> ToUnityAction<T>(Action<T> action)
+        {
+#if MONO_BUILD
+            return new UnityAction<T>(action);
+#else
+            return DelegateSupport.ConvertDelegate<UnityAction<T>>(action);
+#endif
+        }
 
         public static void Log(string message)
         {
@@ -423,39 +432,19 @@ namespace ProduceMore
             SetProperty(typeof(CartEntry), "Listing", __instance, listing);
             SetProperty(typeof(CartEntry), "Quantity", __instance, quantity);
 
-#if MONO_BUILD
-            __instance.IncrementButton.onClick.AddListener(() =>
-            {
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
-            });
-            __instance.DecrementButton.onClick.AddListener(() =>
-            { 
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
-            });
-            __instance.RemoveButton.onClick.AddListener(() =>
-            {
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
-            });
-#else
-            __instance.IncrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
-            {
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
-            }));
-            __instance.DecrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
-            { 
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
-            }));
-            __instance.RemoveButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>(() =>
-            {
-                CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
-            }));
-#endif
+            Action incrementAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
+            Action decrementAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
+            Action removeAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
+            __instance.IncrementButton.onClick.AddListener(ToUnityAction(incrementAction));
+            __instance.DecrementButton.onClick.AddListener(ToUnityAction(decrementAction));
+            __instance.RemoveButton.onClick.AddListener(ToUnityAction(removeAction));
 
             CallMethod(typeof(CartEntry), "UpdateTitle", __instance, []);
             CallMethod(typeof(CartEntry), "UpdatePrice", __instance, []);
 
             return false;
         }
+
 
 
         // Enable user to input more than 999 in delivery app
@@ -468,43 +457,16 @@ namespace ProduceMore
             __instance.Icon.sprite = __instance.MatchingListing.Item.Icon;
             __instance.ItemNameLabel.text = __instance.MatchingListing.Item.Name;
             __instance.ItemPriceLabel.text = MoneyManager.FormatAmount(__instance.MatchingListing.Price, false, false);
-#if MONO_BUILD
-            __instance.QuantityInput.onSubmit.AddListener( (string value) =>
-            {
-                CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
-            });
-            __instance.QuantityInput.onEndEdit.AddListener( (string value) =>
-            {
-                CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
-            });
-            __instance.IncrementButton.onClick.AddListener( () =>
-            {
-                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
-            });
-            __instance.DecrementButton.onClick.AddListener( () =>
-            {
-                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
-            });
-#else
 
-            __instance.QuantityInput.onSubmit.AddListener(DelegateSupport.ConvertDelegate<UnityAction<string>>( (string value) =>
-            {
-                CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
-            }));
-            __instance.QuantityInput.onEndEdit.AddListener(DelegateSupport.ConvertDelegate<UnityAction<string>>( (string value) =>
-            {
-                CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
-            }));
-            __instance.IncrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>( () =>
-            {
-                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
-            }));
-            __instance.DecrementButton.onClick.AddListener(DelegateSupport.ConvertDelegate<UnityAction>( () =>
-            {
-                CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
-            }));
+            Action<string> onSubmitAction = (string value) => CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
+            Action<string> onEndEditAction = (string value) => CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
+            Action incrementAction = () => CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
+            Action decrementAction = () => CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
+            __instance.QuantityInput.onSubmit.AddListener(ToUnityAction<string>(onSubmitAction));
+            __instance.QuantityInput.onEndEdit.AddListener(ToUnityAction<string>(onEndEditAction));
+            __instance.IncrementButton.onClick.AddListener(ToUnityAction(incrementAction));
+            __instance.DecrementButton.onClick.AddListener(ToUnityAction(decrementAction));
 
-#endif
             __instance.QuantityInput.SetTextWithoutNotify(__instance.SelectedQuantity.ToString());
             __instance.RefreshLocked();
 
@@ -739,7 +701,7 @@ namespace ProduceMore
             while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
             {
                 behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
-                yield return new WaitForSeconds(1f / stationSpeed);
+                yield return new WaitForSeconds(Mathf.Min(0.5f, 1f / stationSpeed));
                 int num = itemCount;
                 itemCount = num + 1;
             }
@@ -883,7 +845,7 @@ namespace ProduceMore
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("LabOven") : 1f;
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, 0.5f);
-            yield return new WaitForSeconds(0.5f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Min(0.5f, 0.5f / stationSpeed));
 
             if (!(bool)CallMethod(typeof(StartLabOvenBehaviour), "CanCookStart", behaviour, []))
             {
@@ -892,14 +854,15 @@ namespace ProduceMore
                 yield break;
             }
 
-            behaviour.targetOven.Door.SetPosition(1f / stationSpeed);
-            yield return new WaitForSeconds(0.5f / stationSpeed);
+            // halp
+            behaviour.targetOven.Door.SetPosition(1f);
+            yield return new WaitForSeconds(Mathf.Min(0.5f, 0.5f / stationSpeed));
 
-            behaviour.targetOven.WireTray.SetPosition(1f / stationSpeed);
-            yield return new WaitForSeconds(5f / stationSpeed);
+            behaviour.targetOven.WireTray.SetPosition(1f);
+            yield return new WaitForSeconds(Mathf.Min(0.5f, 5f / stationSpeed));
 
             behaviour.targetOven.Door.SetPosition(0f);
-            yield return new WaitForSeconds(1f / stationSpeed);
+            yield return new WaitForSeconds(Mathf.Min(0.5f, 1f / stationSpeed));
 
             ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
             if (itemInstance == null)
@@ -983,8 +946,8 @@ namespace ProduceMore
             }
 
             behaviour.Npc.SetEquippable_Networked(null, "Avatar/Equippables/Hammer");
-            behaviour.targetOven.Door.SetPosition(1f / stationSpeed);
-            behaviour.targetOven.WireTray.SetPosition(1f / stationSpeed);
+            behaviour.targetOven.Door.SetPosition(1f);
+            behaviour.targetOven.WireTray.SetPosition(1f);
             yield return new WaitForSeconds(0.5f / stationSpeed);
 
             behaviour.targetOven.SquareTray.SetParent(behaviour.targetOven.transform);
@@ -1172,16 +1135,22 @@ namespace ProduceMore
                     if (Is<PackagingStation>(destination))
                     {
                         PackagingStation station = CastTo<PackagingStation>(destination);
-                        int inputStackLimit = Mod.settings.GetStackLimit(station.InputSlots[0].ItemInstance);
-                        if (inputStackLimit - station.InputSlots[0].Quantity > inputStackLimit / 2)
+                        if (station.ProductSlot.ItemInstance == null)
                         {
                             list.Add(mixingStation);
+                        }
+                        else if (station.ProductSlot.ItemInstance.CanStackWith(outputSlot.ItemInstance))
+                        {
+                            int inputStackLimit = Mod.settings.GetStackLimit(station.ProductSlot.ItemInstance);
+                            if (inputStackLimit - station.ProductSlot.Quantity > inputStackLimit / 2)
+                            {
+                                list.Add(mixingStation);
+                            }
                         }
                     }
                     else
                     {
                         list.Add(mixingStation);
-
                     }
                 }
             }
@@ -2416,6 +2385,28 @@ namespace ProduceMore
     [HarmonyPatch]
     public class NPCMovementPatches : Sched1PatchesBase
     {
+        // prevent workers from oscillating around small gaps
+        [HarmonyPatch(typeof(NPCMovement), "UpdateAvoidance")]
+        [HarmonyPrefix]
+        public static bool UpdateAvoidancePostfix(NPCMovement __instance)
+        {
+            float num;
+            Player.GetClosestPlayer(__instance.transform.position, out num, null);
+            if (num > 25f)
+            {
+                __instance.Agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.NoObstacleAvoidance;
+                return false;
+            }
+            __instance.DefaultObstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+            __instance.Agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+
+            //TODO: find a better place to write these
+            __instance.Agent.acceleration = 15f * Mod.settings.employeeWalkAcceleration;
+            __instance.Agent.angularSpeed = 720f * (Mod.settings.employeeWalkAcceleration + 1.0f);
+
+            return false;
+        }
+
         // apply speed multiplier if NPC is an employee
         [HarmonyPatch(typeof(NPCMovement), "UpdateSpeed")]
         [HarmonyPrefix]
@@ -2427,9 +2418,11 @@ namespace ProduceMore
             {
                 walkAcceleration = Mod.settings.employeeWalkAcceleration;
             }
+            __instance.MoveSpeedMultiplier = walkAcceleration;
+
             if ((double)__instance.MovementSpeedScale >= 0.0)
             {
-                __instance.Agent.speed = Mathf.Lerp(__instance.WalkSpeed * walkAcceleration, __instance.RunSpeed, __instance.MovementSpeedScale) * __instance.MoveSpeedMultiplier;
+                __instance.Agent.speed = Mathf.Lerp(__instance.WalkSpeed, __instance.RunSpeed, __instance.MovementSpeedScale) * __instance.MoveSpeedMultiplier;
                 return false;
             }
             __instance.Agent.speed = 0f;
@@ -2437,7 +2430,6 @@ namespace ProduceMore
             return false;
         }
 
-#if !MONO_BUILD
         // call to updatespeed seems to have been optimized out.
         [HarmonyPatch(typeof(NPCMovement), "FixedUpdate")]
         [HarmonyPrefix]
@@ -2480,11 +2472,193 @@ namespace ProduceMore
 
             return false;
         }
-#endif
 
         public static new void RestoreDefaults()
         {
             // no game objects were changed, so we don't need to do anything
+        }
+
+    }
+
+    [HarmonyPatch]
+    public class NoBedsPatches : Sched1PatchesBase
+    {
+
+        [HarmonyPatch(typeof(Employee), "IsPayAvailable")]
+        [HarmonyPrefix]
+        public static bool IsPayAvailablePrefix(Employee __instance, ref bool __result)
+        {
+            MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
+            if (Mod.settings.employeesWorkWithoutBeds)
+            {
+                if (Mod.settings.payEmployeesWithCredit)
+                {
+                    __result = moneyManager.onlineBalance >= __instance.DailyWage;
+                    return false;
+                }
+                else
+                {
+                    __result = moneyManager.cashBalance >= __instance.DailyWage;
+                }
+            }
+            else
+            {
+                EmployeeHome home = __instance.GetHome();
+                if (home == null)
+                {
+                    __result = false;
+                    return false;
+                }
+                __result = home.GetCashSum() >= __instance.DailyWage;
+                return false;
+            }
+            return false;
+        }
+
+        [HarmonyPatch(typeof(Employee), "RemoveDailyWage")]
+        [HarmonyPrefix]
+        public static bool RemoveDailyWagePrefix(Employee __instance)
+        {
+            MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
+            if (Mod.settings.employeesWorkWithoutBeds)
+            {
+                if (Mod.settings.payEmployeesWithCredit)
+                {
+                    if (moneyManager.onlineBalance >= __instance.DailyWage)
+                    {
+                        moneyManager.CreateOnlineTransaction("Employee Pay", __instance.DailyWage, 1f, $"{__instance.fullName}, employeetype, location");
+                    }
+                }
+                else
+                {
+
+                    if (moneyManager.cashBalance >= __instance.DailyWage)
+                    {
+                        moneyManager.ChangeCashBalance(-__instance.DailyWage);
+                    }
+                }
+            }
+            else
+            {
+                EmployeeHome home = __instance.GetHome();
+                if (home == null)
+                {
+                    return false;
+                }
+                if (home.GetCashSum() >= __instance.DailyWage)
+                {
+                    home.RemoveCash(__instance.DailyWage);
+                }
+            }
+            return false;
+        }
+
+        [HarmonyPatch(typeof(Employee), "GetWorkIssue")]
+        [HarmonyPrefix]
+        public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref DialogueContainer notWorkingReason)
+        {
+            if (__instance.GetHome() == null && !Mod.settings.employeesWorkWithoutBeds)
+            {
+                notWorkingReason = __instance.BedNotAssignedDialogue;
+                __result = true;
+                return false;
+            }
+
+            if (!__instance.PaidForToday)
+            {
+                notWorkingReason = __instance.NotPaidDialogue;
+                __result = true;
+                return false;
+            }
+#if MONO_BUILD
+            var workIssues = CastTo<List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
+#else
+            var workIssues = CastTo<Il2CppSystem.Collections.Generic.List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
+#endif
+            if (__instance.TimeSinceLastWorked >= 5 && workIssues.Count > 0)
+            {
+                notWorkingReason = UnityEngine.Object.Instantiate<DialogueContainer>(__instance.WorkIssueDialogueTemplate);
+                notWorkingReason.GetDialogueNodeByLabel("ENTRY").DialogueText = workIssues[0].Reason;
+                if (!string.IsNullOrEmpty(workIssues[0].Fix))
+                {
+                    notWorkingReason.GetDialogueNodeByLabel("FIX").DialogueText = workIssues[0].Fix;
+                }
+                else
+                {
+                    notWorkingReason.GetDialogueNodeByLabel("ENTRY").choices = new DialogueChoiceData[0];
+                }
+                __result = true;
+                return false;
+            }
+            notWorkingReason = null;
+            __result = false;
+
+            return false;
+        }
+
+        [HarmonyPatch(typeof(Employee), "CanWork")]
+        [HarmonyPrefix]
+        public static bool CanWorkPrefix(Employee __instance, ref bool __result)
+        {
+            __result = ((__instance.GetHome() != null) || Mod.settings.employeesWorkWithoutBeds) && 
+                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.settings.employeesAlwaysWork) && 
+                __instance.PaidForToday;
+
+            return false;
+        }
+
+        [HarmonyPatch(typeof(Employee), "UpdateBehaviour")]
+        [HarmonyPrefix]
+        public static bool UpdateBehaviourPrefix(Employee __instance)
+        {
+            if (__instance.Fired)
+            {
+                return false;
+            }
+            if (__instance.behaviour.activeBehaviour == null || __instance.behaviour.activeBehaviour == __instance.WaitOutside)
+            {
+                bool flag = false;
+                bool flag2 = false;
+                if (__instance.GetHome() == null && !Mod.settings.employeesWorkWithoutBeds)
+                {
+                    flag = true;
+                    __instance.SubmitNoWorkReason("I haven't been assigned a locker", "You can use your management clipboard to assign me a locker.", 0);
+                }
+                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Mod.settings.employeesAlwaysWork)
+                {
+                    flag = true;
+                    __instance.SubmitNoWorkReason("Sorry boss, my shift ends at 4AM.", string.Empty, 0);
+                }
+                else if (!__instance.PaidForToday)
+                {
+                    if (__instance.IsPayAvailable())
+                    {
+                        flag2 = true;
+                    }
+                    else
+                    {
+                        flag = true;
+                        __instance.SubmitNoWorkReason("I haven't been paid yet", "You can place cash in my locker.", 0);
+                    }
+                }
+                if (flag)
+                {
+                    CallMethod(typeof(Employee), "SetWaitOutside", __instance, [true]);
+                    return false;
+                }
+                if (InstanceFinder.IsServer && flag2 && __instance.IsPayAvailable())
+                {
+                    __instance.RemoveDailyWage();
+                    __instance.SetIsPaid();
+                }
+            }
+            return false;
+        }
+
+
+        public static new void RestoreDefaults()
+        {
+            // empty
         }
 
     }

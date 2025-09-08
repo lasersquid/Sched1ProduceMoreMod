@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.4", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.5", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -176,9 +176,12 @@ namespace ProduceMore
 		// Enable/disable employee animation acceleration
 		public bool enableStationAnimationAcceleration;
 		public float employeeWalkAcceleration;
+		public bool employeesAlwaysWork;
+		public bool employeesWorkWithoutBeds;
+		public bool payEmployeesWithCredit;
 
 		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.4";
+		public const string CurrentVersion = "1.0.5";
 		public string version;
 
 		private static bool VersionGreaterThan(string version, string other)
@@ -266,6 +269,16 @@ namespace ProduceMore
 				settings.version = "1.0.4";
 				changed = true;
 				MelonLogger.Msg($"Updated settings to v1.0.4");
+			}
+
+			if (VersionGreaterThan("1.0.5", settings.version))
+			{
+				settings.version = "1.0.5";
+				settings.employeesAlwaysWork = false;
+				settings.employeesWorkWithoutBeds = false;
+				settings.payEmployeesWithCredit = false;
+				changed = true;
+				MelonLogger.Msg($"Updated settings to 1.0.5");
 			}
 
 			return changed;
@@ -473,7 +486,10 @@ namespace ProduceMore
 		public int GetStackLimit(ItemInstance item)
 		{
 			int stackLimit = 10;
-
+			if (item == null)
+			{
+				return 0;
+			}
 			if (!stackOverrides.TryGetValue(item.Name, out stackLimit))
 			{
 				EItemCategory category;
