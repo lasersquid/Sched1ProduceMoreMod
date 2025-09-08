@@ -1883,7 +1883,7 @@ namespace ProduceMore
                 {
                     return false;
                 }
-                if (__instance.Npc.behaviour.DEBUG_MODE)
+                if (__instance.beh.DEBUG_MODE)
                 {
                     Debug.Log("Current state: " + __instance.CurrentState.ToString(), null);
                     Debug.Log("Is walking: " + __instance.Npc.Movement.IsMoving.ToString(), null);
@@ -2615,7 +2615,7 @@ namespace ProduceMore
             {
                 return false;
             }
-            if (__instance.behaviour.activeBehaviour == null || __instance.behaviour.activeBehaviour == __instance.WaitOutside)
+            if (__instance.Behaviour.activeBehaviour == null || __instance.Behaviour.activeBehaviour == __instance.WaitOutside)
             {
                 bool flag = false;
                 bool flag2 = false;
