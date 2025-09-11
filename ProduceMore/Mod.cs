@@ -176,6 +176,8 @@ namespace ProduceMore
 		// Enable/disable employee animation acceleration
 		public bool enableStationAnimationAcceleration;
 		public float employeeWalkAcceleration;
+
+		// Enable/disable employee work settings
 		public bool employeesAlwaysWork;
 		public bool employeesWorkWithoutBeds;
 		public bool payEmployeesWithCredit;
@@ -662,12 +664,13 @@ namespace ProduceMore
 // v0.3.6 update - done
 // increase size of shop item quantity text box - done
 // increase purchase limit in shops to 999999 - done
+// move bedless and worklate features to new mod - done
+// move increased purchase limit to new mod - done
 
 // Testing:
 // IL2CPP:
 //		ItemInstancePatches - working
 //		RegistryPatches - working
-//		ShopPatches - working
 //		ChemistryStationPatches - working
 //		DryingRackPatches - working
 //		LabOvenPatches - working
@@ -681,7 +684,6 @@ namespace ProduceMore
 // Mono:
 //		ItemInstancePatches - working
 //		RegistryPatches - working
-//		ShopPatches - working
 //		ChemistryStationPatches - working
 //		DryingRackPatches - working
 //		LabOvenPatches - working
@@ -695,6 +697,6 @@ namespace ProduceMore
 
 
 // Bugs:
-// - handlers don't follow user filters on stations -- fixed
-// - packaging is still really slow -- fixed
-// - mixer acceleration not working -- fixed
+//	- Botanists and Cleaners get stuck. chemists and packagers seem to be okay though?
+//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up
+

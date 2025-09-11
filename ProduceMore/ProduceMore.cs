@@ -367,184 +367,6 @@ namespace ProduceMore
     }
 
 
-    [HarmonyPatch]
-    public class ShopPatches : Sched1PatchesBase
-    {
-
-        // allow user to enter values up to 999999
-        [HarmonyPatch(typeof(ShopAmountSelector), "OnValueChanged")]
-        [HarmonyPrefix]
-        public static bool OnValueChangedPrefix(ShopAmountSelector __instance, string value)
-        {
-            int value2;
-            if (int.TryParse(value, out value2))
-            {
-                SetProperty(typeof(ShopAmountSelector), "SelectedAmount", __instance, Mathf.Clamp(value2, 1, 999999));
-                __instance.InputField.SetTextWithoutNotify(__instance.SelectedAmount.ToString());
-                return false;
-            }
-            SetProperty(typeof(ShopAmountSelector), "SelectedAmount", __instance, 1);
-            __instance.InputField.SetTextWithoutNotify(string.Empty);
-
-            return false;
-        }
-
-        // Call to OnValueChanged probably optimized out
-        [HarmonyPatch(typeof(ShopAmountSelector), "OnSubmitted")]
-        [HarmonyPrefix]
-        public static bool OnSubmittedPrefix(ShopAmountSelector __instance, string value)
-        {
-            if (!__instance.IsOpen)
-            {
-                return false;
-            }
-            CallMethod(typeof(ShopAmountSelector), "OnValueChanged", __instance, [value]);
-            if (__instance.onSubmitted != null)
-            {
-                __instance.onSubmitted.Invoke(__instance.SelectedAmount);
-            }
-            __instance.Close();
-
-            return false;
-        }
-
-        // Modify shop amount selector size so user can enter large numbers
-        [HarmonyPatch(typeof(ShopAmountSelector), "Open")]
-        [HarmonyPrefix]
-        public static void OpenPrefix(ShopAmountSelector __instance)
-        {
-            if (__instance.InputField.characterLimit != 6)
-            {
-                __instance.InputField.characterLimit = 6;
-                __instance.InputField.pointSize -= 2;
-                float width = __instance.Container.rect.width * 1.5f;
-                __instance.Container.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
-            }
-        }
-
-
-        // make cart entry red X actually remove the entire stack
-        [HarmonyPatch(typeof(CartEntry), "Initialize")]
-        [HarmonyPrefix]
-        public static bool CartEntryInitializePrefix(CartEntry __instance, Cart cart, ShopListing listing, int quantity)
-        {
-            SetProperty(typeof(CartEntry), "Cart", __instance, cart);
-            SetProperty(typeof(CartEntry), "Listing", __instance, listing);
-            SetProperty(typeof(CartEntry), "Quantity", __instance, quantity);
-
-            Action incrementAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [1]);
-            Action decrementAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-1]);
-            Action removeAction = () => CallMethod(typeof(CartEntry), "ChangeAmount", __instance, [-999999]);
-            __instance.IncrementButton.onClick.AddListener(ToUnityAction(incrementAction));
-            __instance.DecrementButton.onClick.AddListener(ToUnityAction(decrementAction));
-            __instance.RemoveButton.onClick.AddListener(ToUnityAction(removeAction));
-
-            CallMethod(typeof(CartEntry), "UpdateTitle", __instance, []);
-            CallMethod(typeof(CartEntry), "UpdatePrice", __instance, []);
-
-            return false;
-        }
-
-
-
-        // Enable user to input more than 999 in delivery app
-        // call to OnQuantityInputSubmitted was inlined as well
-        [HarmonyPatch(typeof(ListingEntry), "Initialize")]
-        [HarmonyPrefix]
-        public static bool ListingEntryInitializePrefix(ListingEntry __instance, ShopListing match)
-        {
-            SetProperty(typeof(ListingEntry), "MatchingListing", __instance, match);
-            __instance.Icon.sprite = __instance.MatchingListing.Item.Icon;
-            __instance.ItemNameLabel.text = __instance.MatchingListing.Item.Name;
-            __instance.ItemPriceLabel.text = MoneyManager.FormatAmount(__instance.MatchingListing.Price, false, false);
-
-            Action<string> onSubmitAction = (string value) => CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [value]);
-            Action<string> onEndEditAction = (string value) => CallMethod(typeof(ListingEntry), "ValidateInput", __instance, []);
-            Action incrementAction = () => CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [1]);
-            Action decrementAction = () => CallMethod(typeof(ListingEntry), "ChangeQuantity", __instance, [-1]);
-            __instance.QuantityInput.onSubmit.AddListener(ToUnityAction<string>(onSubmitAction));
-            __instance.QuantityInput.onEndEdit.AddListener(ToUnityAction<string>(onEndEditAction));
-            __instance.IncrementButton.onClick.AddListener(ToUnityAction(incrementAction));
-            __instance.DecrementButton.onClick.AddListener(ToUnityAction(decrementAction));
-
-            __instance.QuantityInput.SetTextWithoutNotify(__instance.SelectedQuantity.ToString());
-            __instance.RefreshLocked();
-
-            if (__instance.QuantityInput.characterLimit != 6)
-            {
-                __instance.QuantityInput.characterLimit = 6;
-                __instance.QuantityInput.textComponent.fontSize = 16;
-                CastTo<RectTransform>(__instance.QuantityInput.transform).sizeDelta = new Vector2(80, 40);
-            }
-
-            return false;
-        }
-
-        // Allow user to purchase more than 999 items at a time from phone app
-        [HarmonyPatch(typeof(ListingEntry), "SetQuantity")]
-        [HarmonyPrefix]
-        public static bool SetQuantityPrefix(ListingEntry __instance, int quant, bool notify)
-        {
-            if (!__instance.MatchingListing.Item.IsPurchasable)
-            {
-                quant = 0;
-            }
-            SetProperty(typeof(ListingEntry), "SelectedQuantity", __instance, Mathf.Clamp(quant, 0, 999999));
-            __instance.QuantityInput.SetTextWithoutNotify(__instance.SelectedQuantity.ToString());
-            if (notify && __instance.onQuantityChanged != null)
-            {
-                __instance.onQuantityChanged.Invoke();
-            }
-
-            return false;
-        }
-
-
-        // Call to SetQuantity probably optimized out
-        [HarmonyPatch(typeof(ListingEntry), "OnQuantityInputSubmitted")]
-        [HarmonyPrefix]
-        public static bool OnQuantityInputSubmittedPrefix(ListingEntry __instance, string value)
-        {
-            int quant;
-            if (int.TryParse(value, out quant))
-            {
-                __instance.SetQuantity(quant, true);
-                return false;
-            }
-            __instance.SetQuantity(0, true);
-
-            return false;
-        }
-
-
-        // Call to SetQuantity probably optimized out
-        [HarmonyPatch(typeof(ListingEntry), "ChangeQuantity")]
-        [HarmonyPrefix]
-        public static bool ChangeQuantityPrefix(ListingEntry __instance, int change)
-        {
-            __instance.SetQuantity(__instance.SelectedQuantity + change, true);
-
-            return false;
-        }
-
-        // call to OnQuantityInputSubmitted probably optimized out
-        [HarmonyPatch(typeof(ListingEntry), "ValidateInput")]
-        [HarmonyPrefix]
-        public static bool ValidateInputPrefix(ListingEntry __instance)
-        {
-            CallMethod(typeof(ListingEntry), "OnQuantityInputSubmitted", __instance, [__instance.QuantityInput.text]);
-            return false;
-        }
-
-        public static new void RestoreDefaults()
-        {
-            // no game objects to restore
-        }
-    }
-
-
-
-
     // Patch drying rack capacity and speed
     [HarmonyPatch]
     public class DryingRackPatches : Sched1PatchesBase
@@ -1804,7 +1626,7 @@ namespace ProduceMore
             float stationSpeed = Mod.settings.enableStationAnimationAcceleration ? Mod.settings.GetStationSpeed("Pot") : 1f;
 
             behaviour.AssignedPot.SetNPCUser(CastTo<Botanist>(GetField(typeof(PotActionBehaviour), "botanist", behaviour)).NetworkObject);
-            behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, Mathf.Max(0.1f, 0.5f  stationSpeed));
+            behaviour.Npc.Movement.FacePoint(behaviour.AssignedPot.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
             
             string actionAnimation = (string)CallMethod(typeof(PotActionBehaviour), "GetActionAnimation", behaviour, [behaviour.CurrentActionType]);
             if (actionAnimation != string.Empty)
@@ -1823,11 +1645,12 @@ namespace ProduceMore
                 SetField(typeof(PotActionBehaviour), "currentActionEquippable", behaviour, behaviour.Npc.SetEquippable_Networked_Return(null, actionEquippable.AssetPath));
             }
             
+            // wait in tenths of seconds
             float waitTime = Mathf.Max(0.1f, behaviour.GetWaitTime(behaviour.CurrentActionType) / stationSpeed);
-            for (float i = 0f; i < waitTime; i += Time.deltaTime)
+            for (float i = 0f; i < waitTime; i += 0.1f)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.AssignedPot.transform.position, 0, false);
-                yield return new WaitForEndOfFrame();
+                yield return new WaitForSeconds(0.1f);
             }
             
             CallMethod(typeof(PotActionBehaviour), "StopPerformAction", behaviour, []);
@@ -2381,32 +2204,13 @@ namespace ProduceMore
         }
     }
 
+
+
+
     
     [HarmonyPatch]
     public class NPCMovementPatches : Sched1PatchesBase
     {
-        // prevent workers from oscillating around small gaps
-        [HarmonyPatch(typeof(NPCMovement), "UpdateAvoidance")]
-        [HarmonyPrefix]
-        public static bool UpdateAvoidancePostfix(NPCMovement __instance)
-        {
-            float num;
-            Player.GetClosestPlayer(__instance.transform.position, out num, null);
-            if (num > 25f)
-            {
-                __instance.Agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.NoObstacleAvoidance;
-                return false;
-            }
-            __instance.DefaultObstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-            __instance.Agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-
-            //TODO: find a better place to write these
-            __instance.Agent.acceleration = 15f * Mod.settings.employeeWalkAcceleration;
-            __instance.Agent.angularSpeed = 720f * (Mod.settings.employeeWalkAcceleration + 1.0f);
-
-            return false;
-        }
-
         // apply speed multiplier if NPC is an employee
         [HarmonyPatch(typeof(NPCMovement), "UpdateSpeed")]
         [HarmonyPrefix]
@@ -2460,8 +2264,7 @@ namespace ProduceMore
                 SetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance, 0f);
                 return false;
             }
-            float ragdollTime = (float)GetProperty(typeof(NPCMovement), "ragdollTime", __instance);
-            SetProperty(typeof(NPCMovement), "ragdollTime", __instance, ragdollTime + Time.fixedDeltaTime);
+           
             float ragdollStaticTime = (float)GetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance);
             if (CastTo<Rigidbody>(GetProperty(typeof(NPCMovement), "ragdollCentralRB", __instance)).velocity.magnitude < 0.25f)
             {
@@ -2477,189 +2280,5 @@ namespace ProduceMore
         {
             // no game objects were changed, so we don't need to do anything
         }
-
-    }
-
-    [HarmonyPatch]
-    public class NoBedsPatches : Sched1PatchesBase
-    {
-
-        [HarmonyPatch(typeof(Employee), "IsPayAvailable")]
-        [HarmonyPrefix]
-        public static bool IsPayAvailablePrefix(Employee __instance, ref bool __result)
-        {
-            MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if (Mod.settings.employeesWorkWithoutBeds)
-            {
-                if (Mod.settings.payEmployeesWithCredit)
-                {
-                    __result = moneyManager.onlineBalance >= __instance.DailyWage;
-                    return false;
-                }
-                else
-                {
-                    __result = moneyManager.cashBalance >= __instance.DailyWage;
-                }
-            }
-            else
-            {
-                EmployeeHome home = __instance.GetHome();
-                if (home == null)
-                {
-                    __result = false;
-                    return false;
-                }
-                __result = home.GetCashSum() >= __instance.DailyWage;
-                return false;
-            }
-            return false;
-        }
-
-        [HarmonyPatch(typeof(Employee), "RemoveDailyWage")]
-        [HarmonyPrefix]
-        public static bool RemoveDailyWagePrefix(Employee __instance)
-        {
-            MoneyManager moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            if (Mod.settings.employeesWorkWithoutBeds)
-            {
-                if (Mod.settings.payEmployeesWithCredit)
-                {
-                    if (moneyManager.onlineBalance >= __instance.DailyWage)
-                    {
-                        moneyManager.CreateOnlineTransaction("Employee Pay", __instance.DailyWage, 1f, $"{__instance.fullName}, employeetype, location");
-                    }
-                }
-                else
-                {
-
-                    if (moneyManager.cashBalance >= __instance.DailyWage)
-                    {
-                        moneyManager.ChangeCashBalance(-__instance.DailyWage);
-                    }
-                }
-            }
-            else
-            {
-                EmployeeHome home = __instance.GetHome();
-                if (home == null)
-                {
-                    return false;
-                }
-                if (home.GetCashSum() >= __instance.DailyWage)
-                {
-                    home.RemoveCash(__instance.DailyWage);
-                }
-            }
-            return false;
-        }
-
-        [HarmonyPatch(typeof(Employee), "GetWorkIssue")]
-        [HarmonyPrefix]
-        public static bool GetWorkIssuePrefix(Employee __instance, ref bool __result, ref DialogueContainer notWorkingReason)
-        {
-            if (__instance.GetHome() == null && !Mod.settings.employeesWorkWithoutBeds)
-            {
-                notWorkingReason = __instance.BedNotAssignedDialogue;
-                __result = true;
-                return false;
-            }
-
-            if (!__instance.PaidForToday)
-            {
-                notWorkingReason = __instance.NotPaidDialogue;
-                __result = true;
-                return false;
-            }
-#if MONO_BUILD
-            var workIssues = CastTo<List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
-#else
-            var workIssues = CastTo<Il2CppSystem.Collections.Generic.List<Employee.NoWorkReason>>(GetField(typeof(Employee), "WorkIssues", __instance));
-#endif
-            if (__instance.TimeSinceLastWorked >= 5 && workIssues.Count > 0)
-            {
-                notWorkingReason = UnityEngine.Object.Instantiate<DialogueContainer>(__instance.WorkIssueDialogueTemplate);
-                notWorkingReason.GetDialogueNodeByLabel("ENTRY").DialogueText = workIssues[0].Reason;
-                if (!string.IsNullOrEmpty(workIssues[0].Fix))
-                {
-                    notWorkingReason.GetDialogueNodeByLabel("FIX").DialogueText = workIssues[0].Fix;
-                }
-                else
-                {
-                    notWorkingReason.GetDialogueNodeByLabel("ENTRY").choices = new DialogueChoiceData[0];
-                }
-                __result = true;
-                return false;
-            }
-            notWorkingReason = null;
-            __result = false;
-
-            return false;
-        }
-
-        [HarmonyPatch(typeof(Employee), "CanWork")]
-        [HarmonyPrefix]
-        public static bool CanWorkPrefix(Employee __instance, ref bool __result)
-        {
-            __result = ((__instance.GetHome() != null) || Mod.settings.employeesWorkWithoutBeds) && 
-                (!NetworkSingleton<TimeManager>.Instance.IsEndOfDay || Mod.settings.employeesAlwaysWork) && 
-                __instance.PaidForToday;
-
-            return false;
-        }
-
-        [HarmonyPatch(typeof(Employee), "UpdateBehaviour")]
-        [HarmonyPrefix]
-        public static bool UpdateBehaviourPrefix(Employee __instance)
-        {
-            if (__instance.Fired)
-            {
-                return false;
-            }
-            if (__instance.Behaviour.activeBehaviour == null || __instance.Behaviour.activeBehaviour == __instance.WaitOutside)
-            {
-                bool flag = false;
-                bool flag2 = false;
-                if (__instance.GetHome() == null && !Mod.settings.employeesWorkWithoutBeds)
-                {
-                    flag = true;
-                    __instance.SubmitNoWorkReason("I haven't been assigned a locker", "You can use your management clipboard to assign me a locker.", 0);
-                }
-                else if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Mod.settings.employeesAlwaysWork)
-                {
-                    flag = true;
-                    __instance.SubmitNoWorkReason("Sorry boss, my shift ends at 4AM.", string.Empty, 0);
-                }
-                else if (!__instance.PaidForToday)
-                {
-                    if (__instance.IsPayAvailable())
-                    {
-                        flag2 = true;
-                    }
-                    else
-                    {
-                        flag = true;
-                        __instance.SubmitNoWorkReason("I haven't been paid yet", "You can place cash in my locker.", 0);
-                    }
-                }
-                if (flag)
-                {
-                    CallMethod(typeof(Employee), "SetWaitOutside", __instance, [true]);
-                    return false;
-                }
-                if (InstanceFinder.IsServer && flag2 && __instance.IsPayAvailable())
-                {
-                    __instance.RemoveDailyWage();
-                    __instance.SetIsPaid();
-                }
-            }
-            return false;
-        }
-
-
-        public static new void RestoreDefaults()
-        {
-            // empty
-        }
-
     }
 }
