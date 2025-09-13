@@ -11,7 +11,6 @@ using UnityEngine.Events;
 using FishNet;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.DevUtilities;
-using ScheduleOne.Dialogue;
 using ScheduleOne.Employees;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
@@ -40,7 +39,6 @@ using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
-using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
@@ -1113,9 +1111,6 @@ namespace ProduceMore
             ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
             float mixTime = Mathf.Max(0.1f, (float)mixQuantity / stationSpeed);
-            // waiting for more than a second or two at a time is a bad idea.
-            // waiting for less than 20ms is also a bad idea.
-            // just yield every second for a happy medium.
             for (int i = 0; i < mixTime; ++i)
             {
                 yield return new WaitForSeconds(1f);
@@ -1530,10 +1525,10 @@ namespace ProduceMore
             //Log($"Have {behaviour.Station.ProductSlot.Quantity} product in input slot, {behaviour.Station.PackagingSlot.Quantity} {behaviour.Station.PackagingSlot.ItemInstance.Definition.Name} in packaging slot, and {behaviour.Station.OutputSlot.Quantity} packaged product in the output.");
             //Log($"Have {outputSpace} output space, {availableToPackage} product to package at {productPerPackage} product per package. Will make {numPackages} packages in {packageTime} seconds.");
 
-            for (float i = 0f; i < packageTime; i++)
+            for (float i = 0f; i < packageTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
-                yield return new WaitForSeconds(1f);
+                yield return new WaitForEndOfFrame();
             }
 
             if (InstanceFinder.IsServer)
@@ -1645,12 +1640,11 @@ namespace ProduceMore
                 SetField(typeof(PotActionBehaviour), "currentActionEquippable", behaviour, behaviour.Npc.SetEquippable_Networked_Return(null, actionEquippable.AssetPath));
             }
             
-            // wait in tenths of seconds
             float waitTime = Mathf.Max(0.1f, behaviour.GetWaitTime(behaviour.CurrentActionType) / stationSpeed);
-            for (float i = 0f; i < waitTime; i += 0.1f)
+            for (float i = 0f; i < waitTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.AssignedPot.transform.position, 0, false);
-                yield return new WaitForSeconds(0.1f);
+                yield return new WaitForEndOfFrame();
             }
             
             CallMethod(typeof(PotActionBehaviour), "StopPerformAction", behaviour, []);
@@ -2211,10 +2205,18 @@ namespace ProduceMore
     [HarmonyPatch]
     public class NPCMovementPatches : Sched1PatchesBase
     {
-        // apply speed multiplier if NPC is an employee
-        [HarmonyPatch(typeof(NPCMovement), "UpdateSpeed")]
+        // whoops, we broke things setting stoppingdistance to 0.4. set it back to its default value.
+        [HarmonyPatch(typeof(NPCMovement), "Awake")]
+        [HarmonyPostfix]
+        public static void AwakePostfix(NPCMovement __instance)
+        {
+            __instance.Agent.stoppingDistance = 0.2f;
+        }
+
+        // Set walk acceleration through a slightly different path
+        [HarmonyPatch(typeof(NPCMovement), "GetPathTo")]
         [HarmonyPrefix]
-        public static bool UpdateSpeedPrefix(NPCMovement __instance)
+        public static bool GetPathToPrefix(NPCMovement __instance)
         {
             float walkAcceleration = 1f;
             NPC npc = CastTo<NPC>(GetField(typeof(NPCMovement), "npc", __instance));
@@ -2222,57 +2224,35 @@ namespace ProduceMore
             {
                 walkAcceleration = Mod.settings.employeeWalkAcceleration;
             }
-            __instance.MoveSpeedMultiplier = walkAcceleration;
 
-            if ((double)__instance.MovementSpeedScale >= 0.0)
-            {
-                __instance.Agent.speed = Mathf.Lerp(__instance.WalkSpeed, __instance.RunSpeed, __instance.MovementSpeedScale) * __instance.MoveSpeedMultiplier;
-                return false;
-            }
-            __instance.Agent.speed = 0f;
+            NPCSpeedController.SpeedControl defaultSpeedControl = __instance.SpeedController.GetSpeedControl("default");
+            defaultSpeedControl.speed = __instance.SpeedController.DefaultWalkSpeed * walkAcceleration;
 
-            return false;
+            return true;
         }
 
-        // call to updatespeed seems to have been optimized out.
-        [HarmonyPatch(typeof(NPCMovement), "FixedUpdate")]
-        [HarmonyPrefix]
-        public static bool FixedUpdatePrefix(NPCMovement __instance)
+        public static new void RestoreDefaults()
         {
-            // re-insert original method body.
-            if (!InstanceFinder.IsServer)
-            {
-                return false;
-            }
-            if (__instance.IsPaused)
-            {
-                __instance.Agent.isStopped = true;
-            }
-            float timeSinceHitByCar = (float)GetProperty(typeof(NPCMovement), "timeSinceHitByCar", __instance);
-            SetProperty(typeof(NPCMovement), "timeSinceHitByCar", __instance, timeSinceHitByCar + Time.fixedDeltaTime);
-            __instance.capsuleCollider.transform.position = CastTo<Rigidbody>(GetField(typeof(NPCMovement), "ragdollCentralRB", __instance)).transform.position;
-            CallMethod(typeof(NPCMovement), "UpdateSpeed", __instance, []);
-            CallMethod(typeof(NPCMovement), "UpdateStumble", __instance, []);
-            CallMethod(typeof(NPCMovement), "UpdateRagdoll", __instance, []);
-            CallMethod(typeof(NPCMovement), "UpdateDestination", __instance, []);
-            CallMethod(typeof(NPCMovement), "RecordVelocity", __instance, []);
-            CallMethod(typeof(NPCMovement), "UpdateSlippery", __instance, []);
-            CallMethod(typeof(NPCMovement), "UpdateCache", __instance, []);
+            // modified gameobjects reverted to default speed automatically
+        }
+    }
 
-            if (!(CastTo<NPCAnimation>(GetProperty(typeof(NPCMovement), "anim", __instance)).Avatar.Ragdolled || !__instance.CanRecoverFromRagdoll()))
-            {
-                SetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance, 0f);
-                return false;
-            }
-           
-            float ragdollStaticTime = (float)GetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance);
-            if (CastTo<Rigidbody>(GetProperty(typeof(NPCMovement), "ragdollCentralRB", __instance)).velocity.magnitude < 0.25f)
-            {
-                SetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance, ragdollStaticTime + Time.fixedDeltaTime);
-                return false;
-            }
-            SetProperty(typeof(NPCMovement), "ragdollStaticTime", __instance, 0f);
 
+    [HarmonyPatch]
+    public class TrashBehaviourPatches : Sched1PatchesBase
+    {
+        // Sometimes TargetBag gets destroyed before it gets properly thrown in the bin.
+        // Check that TargetBag is not null and not destroyed before accessing its members.
+        [HarmonyPatch(typeof(DisposeTrashBagBehaviour), "IsAtDestination")]
+        [HarmonyPrefix]
+        public static bool IsAtDestinationPrefix(DisposeTrashBagBehaviour __instance, ref bool __result)
+        {
+            if (__instance.heldTrash == null && __instance.TargetBag != null)
+            {
+                __result =  Vector3.Distance(__instance.Npc.transform.position, __instance.TargetBag.transform.position) <= 2f;
+                return false;
+            }
+            __result =  Vector3.Distance(__instance.Npc.transform.position, __instance.Cleaner.AssignedProperty.DisposalArea.StandPoint.position) <= 2f;
             return false;
         }
 

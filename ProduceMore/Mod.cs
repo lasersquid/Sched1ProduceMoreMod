@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.5", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.6", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -183,7 +183,7 @@ namespace ProduceMore
 		public bool payEmployeesWithCredit;
 
 		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.5";
+		public const string CurrentVersion = "1.0.6";
 		public string version;
 
 		private static bool VersionGreaterThan(string version, string other)
@@ -276,11 +276,15 @@ namespace ProduceMore
 			if (VersionGreaterThan("1.0.5", settings.version))
 			{
 				settings.version = "1.0.5";
-				settings.employeesAlwaysWork = false;
-				settings.employeesWorkWithoutBeds = false;
-				settings.payEmployeesWithCredit = false;
 				changed = true;
 				MelonLogger.Msg($"Updated settings to 1.0.5");
+			}
+
+			if (VersionGreaterThan("1.0.6", settings.version))
+			{
+				settings.version = "1.0.6";
+				changed = true;
+				MelonLogger.Msg($"Updated settings to 1.0.6");
 			}
 
 			return changed;
@@ -666,6 +670,8 @@ namespace ProduceMore
 // increase purchase limit in shops to 999999 - done
 // move bedless and worklate features to new mod - done
 // move increased purchase limit to new mod - done
+// fix bug where employees got stuck next to their destination - done
+// v0.4.0 update - done
 
 // Testing:
 // IL2CPP:
@@ -697,6 +703,6 @@ namespace ProduceMore
 
 
 // Bugs:
-//	- Botanists and Cleaners get stuck. chemists and packagers seem to be okay though?
+//	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
 //	- Employees get stuck oscillating at narrow gaps when walk speed is turned up
 
