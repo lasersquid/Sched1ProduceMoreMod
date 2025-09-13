@@ -672,6 +672,8 @@ namespace ProduceMore
 // move increased purchase limit to new mod - done
 // fix bug where employees got stuck next to their destination - done
 // v0.4.0 update - done
+// rework employee walk speed multiplier - done
+// figure out why cleaners keep getting stuck - done; moved to own mod
 
 // Testing:
 // IL2CPP:
@@ -704,5 +706,5 @@ namespace ProduceMore
 
 // Bugs:
 //	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
-//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up
+//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed I think??
 
