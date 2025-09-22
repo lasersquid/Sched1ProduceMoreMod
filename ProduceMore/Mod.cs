@@ -79,6 +79,7 @@ namespace ProduceMore
 
 		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
 		{
+			base.OnSceneWasLoaded(buildIndex, sceneName);
 			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
 			{
 				needsReset = true;
@@ -93,6 +94,7 @@ namespace ProduceMore
 				}
 			}
 		}
+
 
 		private void ResetState()
 		{

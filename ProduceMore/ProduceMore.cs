@@ -292,7 +292,6 @@ namespace ProduceMore
             return;
         }
 
-
         public static new void RestoreDefaults()
         {
             try
@@ -756,8 +755,6 @@ namespace ProduceMore
 
             return false;
         }
-
-
 
         // Call our own finishcook coroutine with accelerated animations
         [HarmonyPatch(typeof(FinishLabOvenBehaviour), "RpcLogic___StartAction_2166136261")]
@@ -1680,6 +1677,7 @@ namespace ProduceMore
             yield break;
         }
 
+        // properly stop our coroutines
         [HarmonyPatch(typeof(PotActionBehaviour), "StopPerformAction")]
         [HarmonyPrefix]
         public static bool StopPerformActionPrefix(PotActionBehaviour __instance)
@@ -1719,20 +1717,48 @@ namespace ProduceMore
             return false;
         }
 
+        // Was StopPerformAction inlined here?
+        // Restore original method body
+        [HarmonyPatch(typeof(PotActionBehaviour), "StopAllActions")]
+        [HarmonyPrefix]
+        public static bool StopAllActionsPrefix(PotActionBehaviour __instance)
+        {
+            if (__instance.walkToSuppliesRoutine != null)
+            {
+                __instance.StopCoroutine(__instance.walkToSuppliesRoutine);
+                __instance.walkToSuppliesRoutine = null;
+            }
+            if (__instance.grabRoutine != null)
+            {
+                __instance.StopCoroutine(__instance.grabRoutine);
+                __instance.grabRoutine = null;
+            }
+            if (__instance.walkToPotRoutine != null)
+            {
+                __instance.StopCoroutine(__instance.walkToPotRoutine);
+                __instance.walkToPotRoutine = null;
+            }
+            if (__instance.performActionRoutine != null)
+            {
+                __instance.StopPerformAction();
+            }
+            return false;
+        }
+
 
         [HarmonyPatch(typeof(PotActionBehaviour), "ActiveMinPass")]
         [HarmonyPrefix]
         public static bool ActiveMinPassPrefix(PotActionBehaviour __instance)
         {
             if (!InstanceFinder.IsServer)
-                {
+            {
                     return false;
-                }
-                if (__instance.beh.DEBUG_MODE)
-                {
-                    Debug.Log("Current state: " + __instance.CurrentState.ToString(), null);
-                    Debug.Log("Is walking: " + __instance.Npc.Movement.IsMoving.ToString(), null);
-                }
+            }
+            if (__instance.beh.DEBUG_MODE)
+            {
+                Debug.Log("Current state: " + __instance.CurrentState.ToString(), null);
+                Debug.Log("Is walking: " + __instance.Npc.Movement.IsMoving.ToString(), null);
+            }
             if (__instance.CurrentState == PotActionBehaviour.EState.Idle)
             {
 
