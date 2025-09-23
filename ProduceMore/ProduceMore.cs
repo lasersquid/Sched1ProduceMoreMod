@@ -204,6 +204,7 @@ namespace ProduceMore
                 {
                     stackLimit = 10;
                 }
+
                 __instance.Definition.StackLimit = stackLimit;
                 Mod.processedItemDefs.Add(__instance.Definition);
             }
@@ -234,6 +235,8 @@ namespace ProduceMore
                         Mod.originalStackLimits[category.ToString()] = match.Item.StackLimit;
                     }
                     int stackLimit = Mod.settings.GetStackLimit(match.Item);
+
+
                     match.Item.StackLimit = stackLimit;
                     Mod.processedItemDefs.Add(match.Item);
                 }
@@ -380,6 +383,7 @@ namespace ProduceMore
                 {
                     stackLimit = 10;
                 }
+
                 __result.StackLimit = stackLimit;
                 Mod.processedItemDefs.Add(__result);
             }
@@ -1723,24 +1727,36 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool StopAllActionsPrefix(PotActionBehaviour __instance)
         {
-            if (__instance.walkToSuppliesRoutine != null)
+            if (GetField(typeof(PotActionBehaviour), "walkToSuppliesRoutine", __instance) != null)
             {
-                __instance.StopCoroutine(__instance.walkToSuppliesRoutine);
-                __instance.walkToSuppliesRoutine = null;
+#if MONO_BUILD
+                __instance.StopCoroutine(CastTo<IEnumerator>(GetField(typeof(PotActionBehaviour), "walkToSuppliesRoutine", __instance)));
+#else
+                __instance.StopCoroutine(CastTo<Il2CppSystem.Collections.IEnumerator>(GetField(typeof(PotActionBehaviour), "walkToSuppliesRoutine", __instance)));
+#endif
+                SetField(typeof(PotActionBehaviour), "walkToSuppliesRoutine", __instance, null);
             }
-            if (__instance.grabRoutine != null)
+            if (GetField(typeof(PotActionBehaviour), "grabRoutine", __instance) != null)
             {
-                __instance.StopCoroutine(__instance.grabRoutine);
-                __instance.grabRoutine = null;
+#if MONO_BUILD
+                __instance.StopCoroutine(CastTo<IEnumerator>(GetField(typeof(PotActionBehaviour), "grabRoutine", __instance)));
+#else
+                __instance.StopCoroutine(CastTo<Il2CppSystem.Collections.IEnumerator>(GetField(typeof(PotActionBehaviour), "grabRoutine", __instance)));
+#endif
+                SetField(typeof(PotActionBehaviour), "grabRoutine", __instance, null);
             }
-            if (__instance.walkToPotRoutine != null)
+            if (GetField(typeof(PotActionBehaviour), "walkToPotRoutine", __instance) != null)
             {
-                __instance.StopCoroutine(__instance.walkToPotRoutine);
-                __instance.walkToPotRoutine = null;
+#if MONO_BUILD
+                __instance.StopCoroutine(CastTo<IEnumerator>(GetField(typeof(PotActionBehaviour), "walkToPotRoutine", __instance)));
+#else
+                __instance.StopCoroutine(CastTo<Il2CppSystem.Collections.IEnumerator>(GetField(typeof(PotActionBehaviour), "walkToPotRoutine", __instance)));
+#endif
+                SetField(typeof(PotActionBehaviour), "walkToPotRoutine", __instance, null);
             }
-            if (__instance.performActionRoutine != null)
+            if (GetField(typeof(PotActionBehaviour), "performActionRoutine", __instance) != null)
             {
-                __instance.StopPerformAction();
+                CallMethod(typeof(PotActionBehaviour), "StopPerformAction", __instance, []);
             }
             return false;
         }

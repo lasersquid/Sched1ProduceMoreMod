@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.6", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.7", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -185,7 +185,7 @@ namespace ProduceMore
 		public bool payEmployeesWithCredit;
 
 		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.6";
+		public const string CurrentVersion = "1.0.7";
 		public string version;
 
 		private static bool VersionGreaterThan(string version, string other)
@@ -287,6 +287,18 @@ namespace ProduceMore
 				settings.version = "1.0.6";
 				changed = true;
 				MelonLogger.Msg($"Updated settings to 1.0.6");
+			}
+
+			if (VersionGreaterThan("1.0.7", settings.version))
+			{
+				settings.stackOverrides.TryAdd("Shotgun Shell", 10);
+				settings.stackOverrides.TryAdd("M1911 Magazine", 10);
+				settings.stackOverrides.TryAdd("Revolver Cylinder", 10);
+				settings.stackOverrides.TryAdd("Spray Paint", 10);
+				settings.stackOverrides.TryAdd("Graffiti Cleaner", 10);
+				settings.version = "1.0.7";
+				changed = true;
+				MelonLogger.Msg($"Updated settings to 1.0.7");
 			}
 
 			return changed;
