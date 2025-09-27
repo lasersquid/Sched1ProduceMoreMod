@@ -442,7 +442,7 @@ namespace ProduceMore
 // separate mk1 and mk2 packaging stations - done
 // separate station processing speed and employee work speed into own settings categories - done
 // use melonpreferences for settings - done
-// really, *actually* cleanly shutdown coroutines on quit to menu - testing
+// really, *actually* cleanly shutdown coroutines on quit to menu - done
 // fix bug where employee inventory disappears on save & load - todo
 
 

@@ -550,7 +550,7 @@ namespace ProduceMore
             int itemCount = 0;
             while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
             {
-                behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
+                behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
                 yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
                 int num = itemCount;
                 itemCount = num + 1;
@@ -1324,7 +1324,7 @@ namespace ProduceMore
             float stationSpeed = Mod.GetStationWorkSpeed("BrickPress");
             yield return new WaitForEndOfFrame();
 
-            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", true);
+            behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
             float packageTime = 15f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * stationSpeed);
             for (float i = 0f; i < packageTime; i += Time.deltaTime)
             {
@@ -1332,10 +1332,10 @@ namespace ProduceMore
                 yield return new WaitForEndOfFrame();
             }
 
-            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
             yield return new WaitForSeconds(Mathf.Max(0.1f, 0.2f / stationSpeed));
 
-            behaviour.Npc.Avatar.Anim.SetTrigger("GrabItem");
+            behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
             behaviour.Press.PlayPressAnim();
             yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
 
@@ -1361,7 +1361,7 @@ namespace ProduceMore
                 SetField(typeof(BrickPressBehaviour), "packagingRoutine", __instance, null);
                 Mod.runningCoroutines.Remove(workRoutine);
             }
-            __instance.PackagingInProgress = false;
+            SetField(typeof(BrickPressBehaviour), "PackagingInProgress", __instance, false);
             return false;
         }
 
@@ -1484,14 +1484,14 @@ namespace ProduceMore
         private static IEnumerator BeginCauldronCoroutine(StartCauldronBehaviour behaviour)
         {
             yield return new WaitForEndOfFrame();
-            behaviour.Npc.Avatar.Anim.SetBool("UseChemistryStation", true);
+            behaviour.Npc.Avatar.Animation.SetBool("UseChemistryStation", true);
             float packageTime = Mathf.Max(0.1f, 15f / Mod.GetStationWorkSpeed("Cauldron"));
             for (float i = 0f; i < packageTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.LinkOrigin.position, 0, false);
                 yield return new WaitForEndOfFrame();
             }
-            behaviour.Npc.Avatar.Anim.SetBool("UseChemistryStation", false);
+            behaviour.Npc.Avatar.Animation.SetBool("UseChemistryStation", false);
             if (InstanceFinder.IsServer)
             {
                 EQuality quality = behaviour.Station.RemoveIngredients();
@@ -1598,7 +1598,7 @@ namespace ProduceMore
         private static IEnumerator BeginPackagingCoroutine(PackagingStationBehaviour behaviour)
         {
             yield return new WaitForEndOfFrame();
-            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", true);
+            behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
 
             float stationWorkSpeed;
             if (Is<MixingStationMk2>(behaviour.Station))
@@ -1645,7 +1645,7 @@ namespace ProduceMore
                 behaviour.Station.ProductSlot.ChangeQuantity(-numPackages * productPerPackage, false);
             }
 
-            behaviour.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
             SetProperty(typeof(PackagingStationBehaviour), "PackagingInProgress", behaviour, false);
             SetField(typeof(PackagingStationBehaviour), "packagingRoutine", behaviour, null);
             yield break;
@@ -1663,7 +1663,7 @@ namespace ProduceMore
                 SetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance, null);
                 Mod.runningCoroutines.Remove(workRoutine);
             }
-            __instance.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
+            __instance.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
             if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
             {
                 __instance.Station.SetNPCUser(null);
@@ -1728,7 +1728,7 @@ namespace ProduceMore
                 SetField(typeof(PotActionBehaviour), "currentActionAnimation", behaviour, actionAnimation);
                 behaviour.Npc.SetAnimationBool_Networked(null, actionAnimation, true);
             }
-            if (behaviour.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && !behaviour.Npc.Avatar.Anim.IsCrouched)
+            if (behaviour.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && !behaviour.Npc.Avatar.Animation.IsCrouched)
             {
                 behaviour.Npc.SetCrouched_Networked(true);
             }
@@ -1756,7 +1756,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool StopPerformActionPrefix(PotActionBehaviour __instance)
         {
-            if (__instance.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && __instance.Npc.Avatar.Anim.IsCrouched)
+            if (__instance.CurrentActionType == PotActionBehaviour.EActionType.SowSeed && __instance.Npc.Avatar.Animation.IsCrouched)
             {
                 __instance.Npc.SetCrouched_Networked(false);
             }
