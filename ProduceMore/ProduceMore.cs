@@ -537,6 +537,7 @@ namespace ProduceMore
             __instance.Npc.Movement.FacePoint(__instance.Rack.uiPoint.position, 0.5f);
             object workCoroutine = MelonCoroutines.Start(BeginActionCoroutine(__instance));
             SetField(typeof(StartDryingRackBehaviour), "workRoutine", __instance, (Coroutine)workCoroutine);
+            Mod.runningCoroutines.Add(workCoroutine);
             return false;
         }
 
@@ -571,6 +572,7 @@ namespace ProduceMore
             if (workRoutine != null)
             {
                 MelonCoroutines.Stop(workRoutine);
+                Mod.runningCoroutines.Remove(workRoutine);
                 SetField(typeof(StartDryingRackBehaviour), "workRoutine", __instance, null);
             }
             SetProperty(typeof(StartDryingRackBehaviour), "WorkInProgress", __instance, false);
@@ -689,6 +691,7 @@ namespace ProduceMore
                 }
                 object workRoutine = MelonCoroutines.Start(StartCookCoroutine(__instance));
                 SetField(typeof(StartLabOvenBehaviour), "cookRoutine", __instance, (Coroutine)workRoutine);
+                Mod.runningCoroutines.Add(workRoutine);
             }
             catch (Exception e)
             {
@@ -765,6 +768,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(StartLabOvenBehaviour), "cookRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
 
             return false;
@@ -785,6 +789,7 @@ namespace ProduceMore
             }
             object workRoutine = MelonCoroutines.Start(FinishCookCoroutine(__instance));
             SetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance, (Coroutine)workRoutine);
+            Mod.runningCoroutines.Add(workRoutine);
 
             return false;
         }
@@ -845,6 +850,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(FinishLabOvenBehaviour), "actionRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
 
             return false;
@@ -1114,6 +1120,7 @@ namespace ProduceMore
             }
             object workRoutine = MelonCoroutines.Start(StartMixCoroutine(__instance));
             SetField(typeof(StartMixingStationBehaviour), "startRoutine", __instance, (Coroutine)workRoutine);
+            Mod.runningCoroutines.Add(workRoutine);
 
             return false;
         }
@@ -1180,6 +1187,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(StartMixingStationBehaviour), "startRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
 
             return false;
@@ -1306,6 +1314,7 @@ namespace ProduceMore
             __instance.Npc.Movement.FaceDirection(__instance.Press.StandPoint.forward, 0.5f);
             object workRoutine = MelonCoroutines.Start(PackagingCoroutine(__instance));
             SetField(typeof(BrickPressBehaviour), "packagingRoutine", __instance, (Coroutine)workRoutine);
+            Mod.runningCoroutines.Add(workRoutine);
 
             return false;
         }
@@ -1340,6 +1349,21 @@ namespace ProduceMore
             yield break;
         }
 
+        // gracefully stop meloncoroutine
+        [HarmonyPatch(typeof(BrickPressBehaviour), "StopPackaging")]
+        [HarmonyPrefix]
+        public static bool StopPackagingPrefix(BrickPressBehaviour __instance)
+        {
+            object workRoutine = GetField(typeof(StartMixingStationBehaviour), "packagingRoutine", __instance);
+            if (workRoutine != null)
+            {
+                MelonCoroutines.Stop(workRoutine);
+                SetField(typeof(BrickPressBehaviour), "packagingRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
+            }
+            __instance.PackagingInProgress = false;
+            return false;
+        }
 
         public static new void RestoreDefaults()
         {
@@ -1450,6 +1474,8 @@ namespace ProduceMore
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f);
             object workCoroutine = MelonCoroutines.Start(BeginCauldronCoroutine(__instance));
             SetField(typeof(StartCauldronBehaviour), "workRoutine", __instance, (Coroutine)workCoroutine);
+            Mod.runningCoroutines.Add(workCoroutine);
+
             return false;
         }
 
@@ -1487,6 +1513,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(StartCauldronBehaviour), "workRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
             if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
             {
@@ -1562,6 +1589,7 @@ namespace ProduceMore
             __instance.Npc.Movement.FaceDirection(__instance.Station.StandPoint.forward, 0.5f);
             object packagingCoroutine = MelonCoroutines.Start(BeginPackagingCoroutine(__instance));
             SetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance, (Coroutine)packagingCoroutine);
+            Mod.runningCoroutines.Add(packagingCoroutine);
 
             return false;
         }
@@ -1633,6 +1661,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(PackagingStationBehaviour), "packagingRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
             __instance.Npc.Avatar.Anim.SetBool("UsePackagingStation", false);
             if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
@@ -1680,6 +1709,8 @@ namespace ProduceMore
             SetProperty(typeof(PotActionBehaviour), "CurrentState", __instance, PotActionBehaviour.EState.PerformingAction);
             object workRoutine = MelonCoroutines.Start(PerformActionCoroutine(__instance));
             SetField(typeof(PotActionBehaviour), "performActionRoutine", __instance, (Coroutine)workRoutine);
+            Mod.runningCoroutines.Add(workRoutine);
+
             return false;
         }
 
@@ -1736,6 +1767,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(PotActionBehaviour), "performActionRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
 
             AvatarEquippable currentActionEquippable = CastTo<AvatarEquippable>(GetField(typeof(PotActionBehaviour), "currentActionEquippable", __instance));
@@ -1915,6 +1947,7 @@ namespace ProduceMore
             }
             object workRoutine = MelonCoroutines.Start(StartCookRoutine(__instance));
             SetField(typeof(StartChemistryStationBehaviour), "cookRoutine", __instance, (Coroutine)workRoutine);
+            Mod.runningCoroutines.Add(workRoutine);
 
             return false;
         }
@@ -1987,6 +2020,7 @@ namespace ProduceMore
             {
                 MelonCoroutines.Stop(workRoutine);
                 SetField(typeof(StartChemistryStationBehaviour), "cookRoutine", __instance, null);
+                Mod.runningCoroutines.Remove(workRoutine);
             }
 
             return false;

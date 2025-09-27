@@ -48,6 +48,7 @@ namespace ProduceMore
 			originalRecipeTimes = new Dictionary<StationRecipe, int>(unityComparer);
 
 			registeredEmployees = new HashSet<NPC>(unityComparer);
+			runningCoroutines = new List<object>();
 		}
 
 		public MelonPreferences_Category stationSpeeds;
@@ -67,8 +68,7 @@ namespace ProduceMore
 		public Dictionary<string, int> originalStationTimes;
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
 		public HashSet<NPC> registeredEmployees;
-
-		private bool needsReset = false;
+		public List<object> runningCoroutines;
 
 		public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.producemore");
 
@@ -79,22 +79,24 @@ namespace ProduceMore
 			LoggerInstance.Msg("Initialized.");
 		}
 
-		public override void OnSceneWasLoaded(int buildIndex, string sceneName)
-		{
-			base.OnSceneWasLoaded(buildIndex, sceneName);
+        public override void OnSceneWasUnloaded(int buildIndex, string sceneName)
+        {
+            base.OnSceneWasUnloaded(buildIndex, sceneName);
 			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
 			{
-				//needsReset = true;
+				LoggerInstance.Msg("Scene unloaded, resetting state.");
+				StopCoroutines();
+				ResetState();
 			}
+        }
 
-			if (sceneName.ToLower().Contains("menu"))
+		public void StopCoroutines()
+		{
+			foreach (object coroutine in runningCoroutines)
 			{
-				if (needsReset)
-				{
-					LoggerInstance.Msg("Menu loaded, resetting state.");
-					ResetState();
-				}
+				MelonCoroutines.Stop(coroutine);
 			}
+			runningCoroutines.Clear();
 		}
 
 		public override void OnPreferencesSaved()
@@ -111,7 +113,6 @@ namespace ProduceMore
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
 			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
-			needsReset = false;
 		}
 
 
@@ -441,37 +442,12 @@ namespace ProduceMore
 // separate mk1 and mk2 packaging stations - done
 // separate station processing speed and employee work speed into own settings categories - done
 // use melonpreferences for settings - done
-
-// Testing:
-// IL2CPP:
-//		ItemInstancePatches - working
-//		RegistryPatches - working
-//		ChemistryStationPatches - working
-//		DryingRackPatches - working
-//		LabOvenPatches - working
-//		MixingStationPatches - working
-//		BrickPressPatches - working
-//		CauldronPatches - working
-//		PackagingStationPatches - working
-//		PotPatches - working
-//		CashPatches - working
-//		NPCMovementPatches - needs testing
-// Mono:
-//		ItemInstancePatches - working
-//		RegistryPatches - working
-//		ChemistryStationPatches - working
-//		DryingRackPatches - working
-//		LabOvenPatches - working
-//		MixingStationPatches - working
-//		BrickPressPatches - working
-//		CauldronPatches - working
-//		PackagingStationPatches - working
-//		PotPatches - working
-//		CashPatches - working
-//		NPCMovementPatches - working
+// really, *actually* cleanly shutdown coroutines on quit to menu - testing
+// fix bug where employee inventory disappears on save & load - todo
 
 
 // Bugs:
 //	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
 //	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed
+//	- Employee inventory is cleared on save & load
 
