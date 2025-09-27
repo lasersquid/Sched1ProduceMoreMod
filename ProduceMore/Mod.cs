@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.7", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.8", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -50,6 +50,12 @@ namespace ProduceMore
 			registeredEmployees = new HashSet<NPC>(unityComparer);
 		}
 
+		public MelonPreferences_Category stationSpeeds;
+		public MelonPreferences_Category stationCapacities;
+		public MelonPreferences_Category employeeAnimation;
+		public MelonPreferences_Category stackSizes;
+		public MelonPreferences_Category stackOverrides;
+
 		public IEqualityComparer<UnityEngine.Object> unityComparer;
 		public HashSet<GridItem> processedStationCapacities;
 		public HashSet<GridItem> processedStationSpeeds;
@@ -61,18 +67,14 @@ namespace ProduceMore
 		public Dictionary<string, int> originalStationTimes;
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
 		public HashSet<NPC> registeredEmployees;
-		private bool needsReset = false;
 
-		public ModSettings settings;
-		public const string settingsFileName = "ProduceMoreSettings.json";
-		public string settingsFilePath = Path.Combine(MelonEnvironment.UserDataDirectory, settingsFileName);
+		private bool needsReset = false;
 
 		public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.producemore");
 
 		public override void OnInitializeMelon()
 		{
-			LoadSettings();
-			SaveSettings();
+			InitializeMelonPreferences();
 			SetMod();
 			LoggerInstance.Msg("Initialized.");
 		}
@@ -82,7 +84,7 @@ namespace ProduceMore
 			base.OnSceneWasLoaded(buildIndex, sceneName);
 			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
 			{
-				needsReset = true;
+				//needsReset = true;
 			}
 
 			if (sceneName.ToLower().Contains("menu"))
@@ -95,10 +97,15 @@ namespace ProduceMore
 			}
 		}
 
+		public override void OnPreferencesSaved()
+		{
+			base.OnPreferencesSaved();
+			ResetState();
+		}
 
 		private void ResetState()
 		{
-			RestoreDefaults();
+			//RestoreDefaults(); // needed??
 			processedStationCapacities = new HashSet<GridItem>(unityComparer);
 			processedStationSpeeds = new HashSet<GridItem>(unityComparer);
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
@@ -107,23 +114,78 @@ namespace ProduceMore
 			needsReset = false;
 		}
 
-		private void LoadSettings()
+
+		private void InitializeMelonPreferences()
 		{
-			LoggerInstance.Msg($"Loading settings from {settingsFilePath}");
-			settings = ModSettings.LoadSettings(settingsFilePath);
-			if (ModSettings.UpdateSettings(settings) || !File.Exists(settingsFilePath))
-			{
-				SaveSettings();
-			}
+			stationSpeeds = MelonPreferences.CreateCategory("ProduceMore_01_station_speeds", "Station Speeds (1=normal, 2=double, 0.5=half)");
+			employeeAnimation = MelonPreferences.CreateCategory("ProduceMore_02_employee_animation", "Employee Work Speeds (1=normal, 2=double, 0.5=half)");
+			stationCapacities = MelonPreferences.CreateCategory("ProduceMore_03_station_capacities", "Station Capacities");
+			stackSizes = MelonPreferences.CreateCategory("ProduceMore_04_stack_sizes", "Stack Limits (by category)");
+			stackOverrides = MelonPreferences.CreateCategory("ProduceMore_05_stack_overrides", "Stack Limit Overrides");
+
+			stationSpeeds.SetFilePath("UserData/ProduceMore.cfg");
+			stationCapacities.SetFilePath("UserData/ProduceMore.cfg");
+			employeeAnimation.SetFilePath("UserData/ProduceMore.cfg");
+			stackSizes.SetFilePath("UserData/ProduceMore.cfg");
+			stackOverrides.SetFilePath("UserData/ProduceMore.cfg");
+
+			stationSpeeds.CreateEntry<float>("LabOven", 1f, "Lab Oven", false);
+			stationSpeeds.CreateEntry<float>("Cauldron", 1f, "Cauldron", false);
+			stationSpeeds.CreateEntry<float>("BrickPress", 1f, "Brick Press", false);
+			stationSpeeds.CreateEntry<float>("ChemistryStation", 1f, "Chemistry Station", false);
+			stationSpeeds.CreateEntry<float>("DryingRack", 1f, "Drying Rack", false);
+			stationSpeeds.CreateEntry<float>("MixingStation", 1f, "Mixing Station", false);
+			stationSpeeds.CreateEntry<float>("MixingStationMk2", 1f, "Mixing Station Mk2", false);
+			stationSpeeds.CreateEntry<float>("PackagingStation", 1f, "Packaging Station", false);
+			stationSpeeds.CreateEntry<float>("PackagingStationMk2", 1f, "Packaging Station Mk2", false);
+			stationSpeeds.CreateEntry<float>("Pot", 1f, "Pot", false);
+
+			stationCapacities.CreateEntry<int>("DryingRack", 20, "Drying Rack", false);
+			stationCapacities.CreateEntry<int>("MixingStation", 10, "Mixing Station", false);
+			stationCapacities.CreateEntry<int>("MixingStationMk2", 20, "Mixing Station Mk2", false);
+			stationCapacities.CreateEntry<int>("PackagingStation", 20, "Packaging Station", false);
+			stationCapacities.CreateEntry<int>("PackagingStationMk2", 20, "Packaging Station Mk2", false);
+
+			employeeAnimation.CreateEntry<float>("employeeWalkAcceleration", 1f, "Employee walk speed modifier", false);
+			employeeAnimation.CreateEntry<float>("LabOvenAcceleration", 1f, "Lab Oven animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("CauldronAcceleration", 1f, "Cauldron animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("BrickPressAcceleration", 1f, "Brick Press animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("ChemistryStationAcceleration", 1f, "Chemistry Station animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("DryingRackAcceleration", 1f, "Drying Rack animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("MixingStationAcceleration", 1f, "Mixing Station animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("MixingStationMk2Acceleration", 1f, "Mixing Station Mk2 animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("PackagingStationAcceleration", 1f, "Packaging Station animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("PackagingStationMk2Acceleration", 1f, "Packaging Station Mk2 animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("PotAcceleration", 1f, "Pot animation speed modifier", false);
+
+			stackSizes.CreateEntry<int>("Agriculture", 10, "Agriculture", false);
+			stackSizes.CreateEntry<int>("Cash", 1000, "Cash", false);
+			stackSizes.CreateEntry<int>("Clothing", 1, "Clothing", false);
+			stackSizes.CreateEntry<int>("Consumable", 20, "Consumable", false);
+			stackSizes.CreateEntry<int>("Decoration", 1, "Decoration", false);
+			stackSizes.CreateEntry<int>("Equipment", 10, "Equipment", false);
+			stackSizes.CreateEntry<int>("Furniture", 10, "Furniture", false);
+			stackSizes.CreateEntry<int>("Ingredient", 20, "Ingredient", false);
+			stackSizes.CreateEntry<int>("Lighting", 10, "Lighting", false);
+			stackSizes.CreateEntry<int>("Packaging", 20, "Packaging", false);
+			stackSizes.CreateEntry<int>("Product", 20, "Product", false);
+			stackSizes.CreateEntry<int>("Storage", 10, "Storage", false);
+			stackSizes.CreateEntry<int>("Tools", 1, "Tools", false);
+
+			stackOverrides.CreateEntry<int>("Acid", 10, "Acid", false);
+			stackOverrides.CreateEntry<int>("Phosphorus", 10, "Phosphorus", false);
+			stackOverrides.CreateEntry<int>("Low-Quality Pseudo", 10, "Low-Quality Pseudo", false);
+			stackOverrides.CreateEntry<int>("Pseudo", 10, "Pseudo", false);
+			stackOverrides.CreateEntry<int>("High-Quality Pseudo", 10, "High-Quality Pseudo", false);
+			stackOverrides.CreateEntry<int>("Shotgun Shell", 10, "Shotgun Shell", false);
+			stackOverrides.CreateEntry<int>("M1911 Magazine", 10, "M1911 Magazine", false);
+			stackOverrides.CreateEntry<int>("Revolver Cylinder", 10, "Revolver Cylinder", false);
+			stackOverrides.CreateEntry<int>("Spray Paint", 10, "Spray Paint", false);
+			stackOverrides.CreateEntry<int>("Graffiti Cleaner", 10, "Graffiti Cleaner", false);
+
+			MelonPreferences.Save();
 		}
 
-		private void SaveSettings()
-		{
-			if (settings != null)
-			{
-				settings.SaveSettings(settingsFilePath);
-			}
-		}
 		
 		private List<Type> GetPatchTypes()
 		{
@@ -159,350 +221,6 @@ namespace ProduceMore
 				}
             }
 		}
-	}
-
-	public class ModSettings
-	{
-		// Stack size settings by category
-		public Dictionary<string, int> stackSizes = new Dictionary<string, int>();
-
-		// Stack size settings by item name
-		public Dictionary<string, int> stackOverrides = new Dictionary<string, int>();
-
-		// Station acceleration settings
-		public Dictionary<string, float> stationSpeeds = new Dictionary<string, float>();
-
-		// Station capacity settings
-		public Dictionary<string, int> stationCapacities = new Dictionary<string, int>();
-
-		// Enable/disable employee animation acceleration
-		public bool enableStationAnimationAcceleration;
-		public float employeeWalkAcceleration;
-
-		// Enable/disable employee work settings
-		public bool employeesAlwaysWork;
-		public bool employeesWorkWithoutBeds;
-		public bool payEmployeesWithCredit;
-
-		// version, for upgrading purposes
-		public const string CurrentVersion = "1.0.7";
-		public string version;
-
-		private static bool VersionGreaterThan(string version, string other)
-		{
-			// if other is null, empty string, or malformed, return true
-			if (other == null)
-			{
-				return true;
-			}
-
-			string[] versionStrings = version.Split(['.']);
-			int versionMajor = Convert.ToInt32(versionStrings[0]);
-			int versionMinor = Convert.ToInt32(versionStrings[1]);
-			int versionPatch = Convert.ToInt32(versionStrings[2]);
-
-			string[] otherStrings = other.Split(['.']);
-			int otherMajor = Convert.ToInt32(otherStrings[0]);
-			int otherMinor = Convert.ToInt32(otherStrings[1]);
-			int otherPatch = Convert.ToInt32(otherStrings[2]);
-
-			if (versionMajor > otherMajor)
-			{
-				return true;
-			}
-			else if (versionMajor == otherMajor && versionMinor > otherMinor)
-			{
-				return true;
-			}
-			else if (versionMajor == otherMajor && versionMinor == otherMinor && versionPatch > otherPatch)
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-
-		}
-
-		// return true if settings were modified
-		public static bool UpdateSettings(ModSettings settings)
-		{
-			bool changed = false;
-
-			if (VersionGreaterThan("1.0.2", settings.version))
-			{
-				// upgrading from 1.0.0/1.0.1 to 1.0.2
-				settings.stationSpeeds.Add("BrickPress", 1f);
-				settings.stationSpeeds.Add("MixingStationMk2", 1f);
-				settings.stationCapacities.Add("MixingStationMk2", 20);
-				settings.stackOverrides.Add("Acid", 10);
-				settings.stackOverrides.Add("Phosphorus", 10);
-				settings.stackOverrides.Add("Low-Quality Pseudo", 10);
-				settings.stackOverrides.Add("Pseudo", 10);
-				settings.stackOverrides.Add("High-Quality Pseudo", 10);
-				settings.enableStationAnimationAcceleration = false;
-				settings.employeeWalkAcceleration = 1f;
-				settings.version = "1.0.2";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to v1.0.2");
-			}
-
-			// upgrading from 1.0.2 to 1.0.3
-			if (VersionGreaterThan("1.0.3", settings.version))
-			{
-				int agricultureStackSize = 10;
-				if (settings.stackSizes.ContainsKey("Growing"))
-				{
-					agricultureStackSize = settings.stackSizes["Growing"];
-					settings.stackSizes.Remove("Growing");
-				}
-				else
-				{
-					agricultureStackSize = 10;
-				}
-				settings.stackSizes.TryAdd("Agriculture", agricultureStackSize);
-				settings.stackSizes.TryAdd("Storage", 10);
-				settings.version = "1.0.3";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to v1.0.3");
-			}
-
-			if (VersionGreaterThan("1.0.4", settings.version))
-			{
-				settings.version = "1.0.4";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to v1.0.4");
-			}
-
-			if (VersionGreaterThan("1.0.5", settings.version))
-			{
-				settings.version = "1.0.5";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to 1.0.5");
-			}
-
-			if (VersionGreaterThan("1.0.6", settings.version))
-			{
-				settings.version = "1.0.6";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to 1.0.6");
-			}
-
-			if (VersionGreaterThan("1.0.7", settings.version))
-			{
-				settings.stackOverrides.TryAdd("Shotgun Shell", 10);
-				settings.stackOverrides.TryAdd("M1911 Magazine", 10);
-				settings.stackOverrides.TryAdd("Revolver Cylinder", 10);
-				settings.stackOverrides.TryAdd("Spray Paint", 10);
-				settings.stackOverrides.TryAdd("Graffiti Cleaner", 10);
-				settings.version = "1.0.7";
-				changed = true;
-				MelonLogger.Msg($"Updated settings to 1.0.7");
-			}
-
-			return changed;
-		}
-
-
-		public static ModSettings LoadSettings(string jsonPath)
-		{
-            if (File.Exists(jsonPath))
-            {
-                string json = File.ReadAllText(jsonPath);
-                ModSettings fromFile = JsonConvert.DeserializeObject<ModSettings>(json);
-				ModSettings defaultSettings = new ModSettings();
-
-				foreach (KeyValuePair<string, int> entry in defaultSettings.stackSizes)
-				{
-					if (!fromFile.stackSizes.ContainsKey(entry.Key))
-					{
-						fromFile.stackSizes.Add(entry.Key, entry.Value);
-					}
-				}
-
-				foreach (KeyValuePair<string, float> entry in defaultSettings.stationSpeeds)
-				{
-					if (!fromFile.stationSpeeds.ContainsKey(entry.Key))
-					{
-						fromFile.stationSpeeds.Add(entry.Key, entry.Value);
-					}
-				}
-
-				foreach (KeyValuePair<string, int> entry in defaultSettings.stationCapacities)
-				{
-					if (!fromFile.stationCapacities.ContainsKey(entry.Key))
-					{
-						fromFile.stationCapacities.Add(entry.Key, entry.Value);
-					}
-				}
-
-                foreach(KeyValuePair<string, int> entry in defaultSettings.stackOverrides)
-
-                {
-                    if (!fromFile.stackOverrides.ContainsKey(entry.Key))
-                    {
-                        fromFile.stackOverrides.Add(entry.Key, entry.Value);
-                    }
-                }
-
-
-                //Trim malformed entries and do bounds checking
-                var categoriesToRemove = new List<string>();
-				foreach (KeyValuePair<string, int> entry in fromFile.stackSizes)
-				{
-					if (!defaultSettings.stackSizes.ContainsKey(entry.Key))
-					{
-						// can't change the entries of a list you're iterating over
-						//fromFile.stackSizes.Remove(entry.Key);
-						categoriesToRemove.Add(entry.Key);
-					}
-
-					if (entry.Value <= 0)
-					{
-						MelonLogger.Msg($"Settings file had stacklimit <= 0 for {entry.Key}, resetting to 1");
-						fromFile.stackSizes[entry.Key] = 1;
-					}
-				}
-				// there really should be a builtin for set subtraction, but whatevs.
-				foreach (string category in categoriesToRemove)
-				{
-					fromFile.stackSizes.Remove(category);
-				}
-
-
-				var stringsToRemove = new List<string>();
-				foreach (KeyValuePair<string, float> entry in fromFile.stationSpeeds)
-				{
-					if (!defaultSettings.stationSpeeds.ContainsKey(entry.Key))
-					{
-						//fromFile.stationSpeeds.Remove(entry.Key);
-						stringsToRemove.Add(entry.Key);
-					}
-
-					if (entry.Value < float.MinValue)
-					{
-						MelonLogger.Msg($"Settings file had speed <= 0 for {entry.Key}, resetting to 0.0001");
-						fromFile.stationSpeeds[entry.Key] = 0.0001f;
-					}
-				}
-				foreach(string key in stringsToRemove)
-				{
-					fromFile.stationSpeeds.Remove(key);
-				}
-
-				stringsToRemove.Clear();
-				foreach (KeyValuePair<string, int> entry in fromFile.stationCapacities)
-				{
-					if (!defaultSettings.stationCapacities.ContainsKey(entry.Key))
-					{
-						//fromFile.stationCapacities.Remove(entry.Key);
-						stringsToRemove.Add(entry.Key);
-					}
-
-					if (entry.Value <= 0)
-					{
-						MelonLogger.Msg($"Settings file had capacity <= 0 for {entry.Key}, resetting to 1");
-						fromFile.stationSpeeds[entry.Key] = 1;
-					}
-				}
-				foreach (string key in stringsToRemove)
-				{
-					fromFile.stationCapacities.Remove(key);
-				}
-
-				stringsToRemove.Clear();
-				foreach (KeyValuePair<string, int> entry in fromFile.stackOverrides)
-				{
-					// have to do this validation after scene loads, since registry is not loaded at settings load time
-					//if (!Registry.ItemExists(entry.Key) && !Registry.ItemExists(entry.Key.ToLower()))
-					//{
-					//	stringsToRemove.Add(entry.Key);
-					//	MelonLogger.Msg($"Ignoring stack override that does not correspond to any known item: {entry.Key}");
-					//}
-					if (entry.Value <= 0)
-					{
-						fromFile.stackOverrides[entry.Key] = 1;
-						MelonLogger.Msg($"Stack override for {entry.Key} <= 0; setting to 1");
-					}
-				}
-				foreach (string key in stringsToRemove)
-				{
-					fromFile.stackOverrides.Remove(key);
-				}
-
-				return fromFile;
-            }
-
-			return new ModSettings();
-		}
-
-
-		public void SaveSettings(string jsonPath)
-		{
-			File.WriteAllText(jsonPath, this.ToString());
-		}
-
-		public override string ToString()
-		{
-			return JsonConvert.SerializeObject(this, Formatting.Indented);
-		}
-
-		public void PrintSettings()
-		{
-			MelonLogger.Msg("Settings:");
-			MelonLogger.Msg($"{this}");
-		}
-
-		public ModSettings()
-		{
-			// Default stack sizes
-			stackSizes.Add("Agriculture", 10);
-			stackSizes.Add("Cash", 1000);
-			stackSizes.Add("Clothing", 1);
-			stackSizes.Add("Consumable", 20);
-			stackSizes.Add("Decoration", 1);
-			stackSizes.Add("Equipment", 10);
-			stackSizes.Add("Furniture", 10);
-			stackSizes.Add("Ingredient", 20);
-			stackSizes.Add("Lighting", 10);
-			stackSizes.Add("Packaging", 20);
-			stackSizes.Add("Product", 20);
-			stackSizes.Add("Storage", 10);
-			stackSizes.Add("Tools", 1);
-
-            // Default station speed multipliers
-            stationSpeeds.Add("LabOven", 1);
-			stationSpeeds.Add("Cauldron", 1);
-			stationSpeeds.Add("BrickPress", 1);
-			stationSpeeds.Add("ChemistryStation", 1);
-			stationSpeeds.Add("DryingRack", 1);
-			stationSpeeds.Add("MixingStation", 1);
-			stationSpeeds.Add("MixingStationMk2", 1);
-			stationSpeeds.Add("PackagingStation", 1);
-			stationSpeeds.Add("Pot", 1);
-
-			// Default station processing capacities
-			stationCapacities.Add("DryingRack", 20);
-			stationCapacities.Add("MixingStation", 10);
-			stationCapacities.Add("MixingStationMk2", 20);
-			stationCapacities.Add("PackagingStation", 20);
-
-			// Default stack overrides
-			stackOverrides.Add("Acid", 10);
-			stackOverrides.Add("Phosphorus", 10);
-			stackOverrides.Add("Low-Quality Pseudo", 10);
-			stackOverrides.Add("Pseudo", 10);
-			stackOverrides.Add("High-Quality Pseudo", 10);
-
-			// Disable animation acceleration by default
-			enableStationAnimationAcceleration = false;
-			employeeWalkAcceleration = 1f;
-
-			// Set version
-			version = CurrentVersion;
-		}
-
 		public int GetStackLimit(ItemInstance item)
 		{
 			int stackLimit = 10;
@@ -510,47 +228,61 @@ namespace ProduceMore
 			{
 				return 0;
 			}
-			if (!stackOverrides.TryGetValue(item.Name, out stackLimit))
+			if (stackOverrides.GetEntry<int>(item.Name) != null)
+			{
+				stackLimit = stackOverrides.GetEntry<int>(item.Name).Value;
+			}
+			else
 			{
 				EItemCategory category;
 				if (item.Definition.Name == "Speed Grow")
 				{
 					category = EItemCategory.Agriculture;
 				}
-                else
-                {
-					category = item.Category;
-                }
-
-                if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
+				else
 				{
-					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {category}");
+					category = item.Category;
+				}
+
+				if (stackSizes.GetEntry<int>(category.ToString()) != null)
+				{
+					stackLimit = stackSizes.GetEntry<int>(category.ToString()).Value;
+				}
+				else
+				{
+					MelonLogger.Msg($"Couldn't find stack size for item {item.Name} with category {category}, assuming 10");
 				}
 			}
 
 			return stackLimit;
 		}
-
-
 		public int GetStackLimit(ItemDefinition itemDef)
 		{
 			int stackLimit = 10;
-            if (!stackOverrides.TryGetValue(itemDef.Name, out stackLimit))
-            {
+            if (stackOverrides.GetEntry<int>(itemDef.Name) != null)
+			{
+				stackLimit = stackOverrides.GetEntry<int>(itemDef.Name).Value;
+			}
+			else
+			{
 				EItemCategory category;
 				if (itemDef.Name == "Speed Grow")
 				{
 					category = EItemCategory.Agriculture;
 				}
-                else
-                {
+				else
+				{
 					category = itemDef.Category;
-                }
-                if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
-                {
-                    MelonLogger.Msg($"Couldn't find stack size for item {itemDef.Name} with category {category}");
-                }
-            }
+				}
+				if (stackSizes.GetEntry<int>(category.ToString()) != null)
+				{
+					stackLimit = stackSizes.GetEntry<int>(category.ToString()).Value;
+				}
+				else
+				{
+					MelonLogger.Msg($"Couldn't find stack size for item {itemDef.Name} with category {category}");
+				}
+			}
 
             return stackLimit;
         }
@@ -559,7 +291,11 @@ namespace ProduceMore
 		{
 			int stackLimit = 10;
 
-			if (!stackOverrides.TryGetValue(itemName, out stackLimit))
+			if (stackOverrides.GetEntry<int>(itemName) != null)
+			{
+				stackLimit = stackOverrides.GetEntry<int>(itemName).Value;
+			}
+			else
 			{
 				EItemCategory actualCategory;
 				if (itemName == "Speed Grow")
@@ -570,7 +306,11 @@ namespace ProduceMore
 				{
 					actualCategory = category;
 				}
-				if (!stackSizes.TryGetValue(actualCategory.ToString(), out stackLimit))
+				if (stackSizes.GetEntry<int>(actualCategory.ToString()) != null)
+				{
+					stackLimit = stackSizes.GetEntry<int>(actualCategory.ToString()).Value;
+				}
+				else
 				{
 					MelonLogger.Msg($"Couldn't find stack size for item {itemName} with category {actualCategory}");
 				}
@@ -582,55 +322,65 @@ namespace ProduceMore
 		{
 			int stackLimit = 10;
 
-			if (!stackSizes.TryGetValue(category.ToString(), out stackLimit))
-			{ 
+			if (stackSizes.GetEntry<int>(category.ToString()) != null)
+			{
+				stackLimit = stackSizes.GetEntry<int>(category.ToString()).Value;
+			}
+			else
+			{
 				MelonLogger.Msg($"Couldn't find stack size for category {category}");
 			}
 			return stackLimit;
 		}
 
 
-		public int GetLargestStackLimit()
-		{
-			int largest = 0;
-			foreach(int size in stackSizes.Values)
+        public int GetStationCapacity(string station)
+        {
+            int capacity = 10;
+            if (stationCapacities.GetEntry<int>(station) != null)
 			{
-				if (size > largest)
-					largest = size;
+				capacity = stationCapacities.GetEntry<int>(station).Value;
 			}
-			foreach (int size in stackOverrides.Values)
-			{
-				if (size > largest)
-					largest = size;
-			}
-
-			return largest;
-		}
-
-		public int GetStationCapacity(string station)
-		{
-			int capacity = 10;
-
-			if (!stationCapacities.TryGetValue(station, out capacity))
+			else
 			{
 				MelonLogger.Msg($"Couldn't find station capacity for {station}");
 			}
 
-			return capacity;
-		}
+            return capacity;
+        }
 
-		public float GetStationSpeed(string station)
-		{
-			float speed = 1f;
+        public float GetStationSpeed(string station)
+        {
+            float speed = 1f;
 
-			if (!stationSpeeds.TryGetValue(station, out speed))
+            if (stationSpeeds.GetEntry<float>(station) != null)
 			{
-				MelonLogger.Msg($"Couldn't find station speed for {station}");
+				speed = stationSpeeds.GetEntry<float>(station).Value;
+			}
+			else
+			{
+				MelonLogger.Msg($"Couldn't find station speed modifier for {station}");
 			}
 
-			return speed;
-		}
-	}
+            return speed;
+        }
+
+        public float GetStationWorkSpeed(string station)
+        {
+            float speed = 1f;
+
+            if (employeeAnimation.GetEntry<float>($"{station}Acceleration") != null)
+			{
+				speed = employeeAnimation.GetEntry<float>($"{station}Acceleration").Value;
+			}
+			else
+			{
+				MelonLogger.Msg($"Couldn't find employee work speed modifier for {station}");
+			}
+
+            return speed;
+        }
+    }
 
 	// Compare unity objects by their instance ID
     public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
@@ -688,6 +438,9 @@ namespace ProduceMore
 // v0.4.0 update - done
 // rework employee walk speed multiplier - done
 // figure out why cleaners keep getting stuck - done; moved to own mod
+// separate mk1 and mk2 packaging stations - done
+// separate station processing speed and employee work speed into own settings categories - done
+// use melonpreferences for settings - done
 
 // Testing:
 // IL2CPP:
@@ -720,5 +473,5 @@ namespace ProduceMore
 
 // Bugs:
 //	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
-//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed I think??
+//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed
 
