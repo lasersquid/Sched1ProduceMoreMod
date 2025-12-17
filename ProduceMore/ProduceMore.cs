@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
+using Unity.Jobs.LowLevel.Unsafe;
 
 
 #if MONO_BUILD
@@ -16,13 +17,12 @@ using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Management;
-using ScheduleOne.Money;
-using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
+using ScheduleOne.NPCs;
 using ScheduleOne.ObjectScripts;
-using ScheduleOne.PlayerScripts;
-using ScheduleOne.Product;
+using ScheduleOne.Packaging;
 using ScheduleOne.Product.Packaging;
+using ScheduleOne.Product;
 using ScheduleOne.StationFramework;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Management;
@@ -34,9 +34,9 @@ using ScheduleOne.Variables;
 using ScheduleOne;
 #else
 using Il2CppFishNet;
-using Il2CppInterop.Runtime;
-using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Il2CppInterop.Runtime.InteropTypes;
+using Il2CppInterop.Runtime;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
@@ -45,12 +45,13 @@ using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Management;
 using Il2CppScheduleOne.Money;
-using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.Behaviour;
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.ObjectScripts;
+using Il2CppScheduleOne.Packaging;
 using Il2CppScheduleOne.PlayerScripts;
-using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Product.Packaging;
+using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI.Management;
@@ -101,6 +102,11 @@ namespace ProduceMore
         public static object CallMethod(Type type, string methodName, object target, object[] args)
         {
             return AccessTools.Method(type, methodName).Invoke(target, args);
+        }
+
+        public static object CallMethod(Type type, string methodName, Type[] argTypes, object target, object[] args)
+        {
+            return AccessTools.Method(type, methodName, argTypes).Invoke(target, args);
         }
 
         public static void SetMod(ProduceMoreMod mod)
@@ -997,7 +1003,7 @@ namespace ProduceMore
                 if (outputSlot.Quantity != 0 && __instance.MoveItemBehaviour.IsTransitRouteValid(CastTo<MixingStationConfiguration>(mixingStation.Configuration).DestinationRoute, outputSlot.ItemInstance.ID))
                 {
                     // Only deliver to packaging stations with at least half a stack of space in input slot.
-                    if (Is<PackagingStation>(destination))
+                    if (Is<PackagingStation>(destination) || Is<PackagingStationMk2>(destination))
                     {
                         PackagingStation station = CastTo<PackagingStation>(destination);
                         if (station.ProductSlot.ItemInstance == null)
@@ -1354,7 +1360,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool StopPackagingPrefix(BrickPressBehaviour __instance)
         {
-            object workRoutine = GetField(typeof(StartMixingStationBehaviour), "packagingRoutine", __instance);
+            object workRoutine = GetField(typeof(BrickPressBehaviour), "packagingRoutine", __instance);
             if (workRoutine != null)
             {
                 MelonCoroutines.Stop(workRoutine);
@@ -1594,6 +1600,7 @@ namespace ProduceMore
             return false;
         }
 
+
         // replacement coroutine to accelerate animation
         private static IEnumerator BeginPackagingCoroutine(PackagingStationBehaviour behaviour)
         {
@@ -1601,7 +1608,7 @@ namespace ProduceMore
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
 
             float stationWorkSpeed;
-            if (Is<MixingStationMk2>(behaviour.Station))
+            if (Is<PackagingStationMk2>(behaviour.Station))
             {
                 stationWorkSpeed = Mod.GetStationWorkSpeed("PackagingStationMk2");
             }
@@ -1615,7 +1622,8 @@ namespace ProduceMore
             int outputSpace = behaviour.Station.OutputSlot.GetCapacityForItem(packagedInstance);
             int productPerPackage = CastTo<PackagingDefinition>(behaviour.Station.PackagingSlot.ItemInstance.Definition).Quantity;
             int availableToPackage = Mathf.Min(behaviour.Station.ProductSlot.Quantity, behaviour.Station.PackagingSlot.Quantity);
-            int numPackages = Mathf.Min(availableToPackage / productPerPackage, outputSpace);
+            // leave the last package to PackSingleInstance
+            int numPackages = Mathf.Max(Mathf.Min(availableToPackage / productPerPackage, outputSpace) - 1, 0);
             float packageTime = Mathf.Max(0.1f, (float)numPackages * 5f / (CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier * stationWorkSpeed));
 
             //Log($"Have {behaviour.Station.ProductSlot.Quantity} product in input slot, {behaviour.Station.PackagingSlot.Quantity} {behaviour.Station.PackagingSlot.ItemInstance.Definition.Name} in packaging slot, and {behaviour.Station.OutputSlot.Quantity} packaged product in the output.");
@@ -1627,10 +1635,10 @@ namespace ProduceMore
                 yield return new WaitForEndOfFrame();
             }
 
-            if (InstanceFinder.IsServer)
+            if (InstanceFinder.IsServer && numPackages >= 0)
             {
                 float value = NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("PackagedProductCount");
-                NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("PackagedProductCount", (value + numPackages * productPerPackage).ToString(), true);
+                NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("PackagedProductCount", (value + (numPackages + 1) * productPerPackage).ToString(), true);
                 if (behaviour.Station.OutputSlot.ItemInstance == null)
                 {
                     behaviour.Station.OutputSlot.SetStoredItem(packagedInstance, false);
@@ -1643,6 +1651,8 @@ namespace ProduceMore
                 }
                 behaviour.Station.PackagingSlot.ChangeQuantity(-numPackages, false);
                 behaviour.Station.ProductSlot.ChangeQuantity(-numPackages * productPerPackage, false);
+                // Make sure PackSingleInstance is called--AutoRestock hooks it
+                behaviour.Station.PackSingleInstance();
             }
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
@@ -2369,9 +2379,9 @@ namespace ProduceMore
         }
 
         // Set walk acceleration through a slightly different path
-        [HarmonyPatch(typeof(NPCMovement), "GetPathTo")]
+        [HarmonyPatch(typeof(NPCMovement), "SetDestination", [typeof(Vector3), typeof(Action<NPCMovement.WalkResult>), typeof(bool), typeof(float), typeof(float)])]
         [HarmonyPrefix]
-        public static bool GetPathToPrefix(NPCMovement __instance)
+        public static bool SetDestinationPrefix(NPCMovement __instance)
         {
             float walkAcceleration = 1f;
             NPC npc = CastTo<NPC>(GetField(typeof(NPCMovement), "npc", __instance));

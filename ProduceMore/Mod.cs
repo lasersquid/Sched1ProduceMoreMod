@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.8", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.9", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -124,11 +124,11 @@ namespace ProduceMore
 			stackSizes = MelonPreferences.CreateCategory("ProduceMore_04_stack_sizes", "Stack Limits (by category)");
 			stackOverrides = MelonPreferences.CreateCategory("ProduceMore_05_stack_overrides", "Stack Limit Overrides");
 
-			stationSpeeds.SetFilePath("UserData/ProduceMore.cfg");
-			stationCapacities.SetFilePath("UserData/ProduceMore.cfg");
-			employeeAnimation.SetFilePath("UserData/ProduceMore.cfg");
-			stackSizes.SetFilePath("UserData/ProduceMore.cfg");
-			stackOverrides.SetFilePath("UserData/ProduceMore.cfg");
+			stationSpeeds.SetFilePath("UserData/ProduceMore.cfg", true, false);
+			stationCapacities.SetFilePath("UserData/ProduceMore.cfg", true, false);
+			employeeAnimation.SetFilePath("UserData/ProduceMore.cfg", true, false);
+			stackSizes.SetFilePath("UserData/ProduceMore.cfg", true, false);
+			stackOverrides.SetFilePath("UserData/ProduceMore.cfg", true, false);
 
 			stationSpeeds.CreateEntry<float>("LabOven", 1f, "Lab Oven", false);
 			stationSpeeds.CreateEntry<float>("Cauldron", 1f, "Cauldron", false);
@@ -184,7 +184,11 @@ namespace ProduceMore
 			stackOverrides.CreateEntry<int>("Spray Paint", 10, "Spray Paint", false);
 			stackOverrides.CreateEntry<int>("Graffiti Cleaner", 10, "Graffiti Cleaner", false);
 
-			MelonPreferences.Save();
+			stationSpeeds.SaveToFile(false);
+			stationCapacities.SaveToFile(false);
+			employeeAnimation.SaveToFile(false);
+			stackSizes.SaveToFile(false);
+			stackOverrides.SaveToFile(false);
 		}
 
 		
@@ -444,10 +448,11 @@ namespace ProduceMore
 // use melonpreferences for settings - done
 // really, *actually* cleanly shutdown coroutines on quit to menu - done
 // fix bug where employee inventory disappears on save & load - todo
+// use packaging station mk2 speed for packaging station mk2 - done
 
 
 // Bugs:
 //	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
 //	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed
-//	- Employee inventory is cleared on save & load
+//	- Employee inventory is cleared on save & load - not my bug
 
