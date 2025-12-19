@@ -26,7 +26,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.9", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.10", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -119,7 +119,7 @@ namespace ProduceMore
 		private void InitializeMelonPreferences()
 		{
 			stationSpeeds = MelonPreferences.CreateCategory("ProduceMore_01_station_speeds", "Station Speeds (1=normal, 2=double, 0.5=half)");
-			employeeAnimation = MelonPreferences.CreateCategory("ProduceMore_02_employee_animation", "Employee Work Speeds (1=normal, 2=double, 0.5=half)");
+			employeeAnimation = MelonPreferences.CreateCategory("ProduceMore_02_employee_animation", "Employee Speed (1=normal, 2=double, 0.5=half)");
 			stationCapacities = MelonPreferences.CreateCategory("ProduceMore_03_station_capacities", "Station Capacities");
 			stackSizes = MelonPreferences.CreateCategory("ProduceMore_04_stack_sizes", "Stack Limits (by category)");
 			stackOverrides = MelonPreferences.CreateCategory("ProduceMore_05_stack_overrides", "Stack Limit Overrides");
@@ -447,11 +447,12 @@ namespace ProduceMore
 // separate station processing speed and employee work speed into own settings categories - done
 // use melonpreferences for settings - done
 // really, *actually* cleanly shutdown coroutines on quit to menu - done
-// fix bug where employee inventory disappears on save & load - todo
 // use packaging station mk2 speed for packaging station mk2 - done
+// rework employee walk speed multiplier, again - done
 
 
 // Bugs:
+//	- Employee walk speed multiplier no longer works -- fixed
 //	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
 //	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed
 //	- Employee inventory is cleared on save & load - not my bug

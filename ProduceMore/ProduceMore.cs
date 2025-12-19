@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
-using Unity.Jobs.LowLevel.Unsafe;
+
 
 
 #if MONO_BUILD
@@ -2378,8 +2378,34 @@ namespace ProduceMore
             __instance.Agent.stoppingDistance = 0.2f;
         }
 
-        // Set walk acceleration through a slightly different path
-        [HarmonyPatch(typeof(NPCMovement), "SetDestination", [typeof(Vector3), typeof(Action<NPCMovement.WalkResult>), typeof(bool), typeof(float), typeof(float)])]
+        public static new void RestoreDefaults()
+        {
+            // modified gameobjects reverted to default speed automatically
+        }
+    }
+
+    [HarmonyPatch]
+    public class SetDestinationPatches : Sched1PatchesBase
+    {
+        [HarmonyTargetMethod]
+        public static MethodBase TargetMethod()
+        {
+            var methods = AccessTools.GetDeclaredMethods(typeof(NPCMovement));
+            var possibilities = methods.FindAll((method) => method.Name == "SetDestination");
+            MelonLogger.Msg($"Found {possibilities.Count} possibilities");
+            foreach (var method in possibilities)
+            {
+                var parameters = method.GetParameters();
+                if (parameters.Length == 5)
+                {
+                    MelonLogger.Msg($"Matched method {method.Name} with parameter types {parameters[0]}, {parameters[1]}, {parameters[2]}, {parameters[3]}, {parameters[4]}");
+                    return method;
+                }
+            }
+            return null;
+        }
+
+        [HarmonyPatch]
         [HarmonyPrefix]
         public static bool SetDestinationPrefix(NPCMovement __instance)
         {
@@ -2389,17 +2415,12 @@ namespace ProduceMore
             {
                 walkAcceleration = Mod.employeeAnimation.GetEntry<float>("employeeWalkAcceleration").Value;
             }
-
-            NPCSpeedController.SpeedControl defaultSpeedControl = __instance.SpeedController.GetSpeedControl("default");
-            defaultSpeedControl.speed = __instance.SpeedController.DefaultWalkSpeed * walkAcceleration;
+            __instance.MoveSpeedMultiplier = walkAcceleration;
+            __instance.Agent.acceleration = 20f * walkAcceleration * walkAcceleration;
+            __instance.Agent.angularSpeed = 720f * walkAcceleration * walkAcceleration;
 
             return true;
         }
 
-
-        public static new void RestoreDefaults()
-        {
-            // modified gameobjects reverted to default speed automatically
-        }
     }
 }
