@@ -35,7 +35,7 @@ namespace ProduceMore
 	{
 		public ProduceMoreMod()
 		{
-			unityComparer = new UnityObjectComparer();
+			unityComparer = new Utils.UnityObjectComparer();
 			processedStationCapacities = new HashSet<GridItem>(unityComparer);
 			processedStationSpeeds = new HashSet<GridItem>(unityComparer);
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
@@ -75,7 +75,7 @@ namespace ProduceMore
 		public override void OnInitializeMelon()
 		{
 			InitializeMelonPreferences();
-			SetMod();
+			Utils.SetMod(this);
 			LoggerInstance.Msg("Initialized.");
 		}
 
@@ -107,7 +107,6 @@ namespace ProduceMore
 
 		private void ResetState()
 		{
-			//RestoreDefaults(); // needed??
 			processedStationCapacities = new HashSet<GridItem>(unityComparer);
 			processedStationSpeeds = new HashSet<GridItem>(unityComparer);
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
@@ -191,41 +190,6 @@ namespace ProduceMore
 			stackOverrides.SaveToFile(false);
 		}
 
-		
-		private List<Type> GetPatchTypes()
-		{
-			return  System.Reflection.Assembly.GetExecutingAssembly()
-				.GetTypes()
-				.Where(t => t.Name.EndsWith("Patches"))
-				.ToList<Type>();
-		}
-
-		private void SetMod()
-		{
-            foreach (var t in GetPatchTypes())
-            {
-				MethodInfo method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-				method.Invoke(null, [this]);
-            }
-        }
-
-		public void RestoreDefaults()
-		{
-            foreach (var t in GetPatchTypes())
-            {
-				try
-				{
-					MethodInfo method = t.GetMethod("RestoreDefaults", BindingFlags.Public | BindingFlags.Static);
-					method.Invoke(null, null);
-				}
-				catch (Exception e)
-				{
-					LoggerInstance.Warning($"Couldn't restore defaults for class {t.Name}: {e.GetType().Name} - {e.Message}");
-					LoggerInstance.Warning($"Source: {e.Source}");
-					LoggerInstance.Warning($"{e.StackTrace}");
-				}
-            }
-		}
 		public int GetStackLimit(ItemInstance item)
 		{
 			int stackLimit = 10;
@@ -385,21 +349,6 @@ namespace ProduceMore
 
             return speed;
         }
-    }
-
-	// Compare unity objects by their instance ID
-    public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
-    {
-        public bool Equals(UnityEngine.Object a, UnityEngine.Object b)
-        {
-            return a.GetInstanceID() == b.GetInstanceID();
-        }
-
-        public int GetHashCode(UnityEngine.Object item)
-        {
-            return item.GetInstanceID();
-        }
-
     }
 }
 

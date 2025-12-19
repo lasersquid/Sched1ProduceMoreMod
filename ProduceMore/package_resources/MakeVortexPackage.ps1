@@ -34,6 +34,7 @@ mkdir "$($pkg_base)\mods"
 
 # Copy the files
 Copy "bin\$($arch)\$($net_ver)\$($dll_file)" "$($pkg_base)\mods"
+Copy "package_resources\extras\*" "$($pkg_base)\mods"
 
 # Zip it all up
 Compress-Archive -Path "$($pkg_base)\*" -DestinationPath "$($pkg_base)\..\$($zip_file)"
