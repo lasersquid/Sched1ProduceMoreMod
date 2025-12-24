@@ -5,11 +5,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
-using Il2CppSystem;
-
-
-
-
 
 #if MONO_BUILD
 using FishNet;
@@ -41,6 +36,7 @@ using ItemInstanceList = System.Collections.Generic.List<ScheduleOne.ItemFramewo
 using MixingStationList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.MixingStation>;
 using Type = System.Type;
 using Action = System.Action;
+using Exception = System.Exception;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
@@ -133,10 +129,12 @@ namespace ProduceMore
         {
             return CastTo<Treturn>(CallMethod<Ttarget>(methodName, target, args));
         }
+
         public static Treturn CallMethod<Ttarget, Treturn>(string methodName, Type[] argTypes, object target, object[] args) where Treturn : class
         {
             return CastTo<Treturn>(CallMethod<Ttarget>(methodName, argTypes, target, args));
         }
+
         public static object CallMethod<Ttarget>(string methodName, object target)
         {
             return AccessTools.Method(typeof(Ttarget), methodName).Invoke(target, []);
@@ -215,11 +213,6 @@ namespace ProduceMore
         {
             MelonCoroutines.Stop(coroutine);
             Mod.runningCoroutines.Remove(coroutine);
-        }
-
-        public static T ToInterface<T>(object o)
-        {
-            return (T)o;
         }
 
 #if MONO_BUILD
@@ -1504,6 +1497,43 @@ namespace ProduceMore
         }
     }
 
+    [HarmonyPatch]
+    public class ShroomPatches
+    {
+        // this function is probably inlined.
+        [HarmonyPatch(typeof(ShroomColony), "GetCurrentGrowthRate")]
+        [HarmonyPostfix]
+        public static void GetCurrentGrowthRatePostfix(ref float __result)
+        {
+            __result = __result * Utils.Mod.stationSpeeds.GetEntry<float>("MushroomBed").Value;
+        }
+
+        // GetCurrentGrowthRate is probably inlined. Replace OnMinPass with original method body.
+        [HarmonyPatch(typeof(ShroomColony), "OnMinPass")]
+        [HarmonyPrefix]
+        public static bool OnMinPassPrefix(ShroomColony __instance)
+        {
+            int growTime = (int)Utils.GetProperty<ShroomColony>("_growTime", __instance);
+            float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
+            Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [(currentGrowthRate / ((float)growTime * 60f))]);
+            return false;
+        }
+
+        // GetCurrentGrowthRate is probably inlined. Replace with original method body.
+        [HarmonyPatch(typeof(ShroomColony), "OnTimeSkipped")]
+        [HarmonyPrefix]
+        public static bool OnTimeSkipped(ShroomColony __instance, int mins)
+        {
+            int growTime = (int)Utils.GetProperty<ShroomColony>("_growTime", __instance);
+            float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
+            Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [(currentGrowthRate / ((float)growTime * 60f * (float)mins))]);
+            if (InstanceFinder.IsServer)
+            {
+                Utils.CallMethod<ShroomColony>("SetGrowthPercentage_Local", __instance, [null, __instance.GrowthProgress]);
+            }
+            return false;
+        }
+    }
 
     // pot patches
     [HarmonyPatch]
@@ -2084,6 +2114,8 @@ namespace ProduceMore
         }
     }
 
+    // NPCMovement.SetDestination has a generic in its signature, which is unfriendly to annotations.
+    // Just move it to its own class and use HarmonyTargetMethod instead.
     [HarmonyPatch]
     public class SetDestinationPatches
     {

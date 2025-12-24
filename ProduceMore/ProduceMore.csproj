@@ -39,8 +39,8 @@
 		<None Remove="il2cpp_libs\**" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)'=='IL2CPP'">
-		<EmbeddedResource Remove="Mono_libs\**" />
-		<None Remove="Mono_libs\**" />
+		<EmbeddedResource Remove="mono_libs\**" />
+		<None Remove="mono_libs\**" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -140,7 +140,6 @@
 		</PackageReference>
 		<PackageReference Include="Lib.Harmony" Version="2.4.2" />
 		<PackageReference Include="Microsoft.Diagnostics.Runtime" Version="3.1.512801" />
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 	</ItemGroup>
 
 	<PropertyGroup>

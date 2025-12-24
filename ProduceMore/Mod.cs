@@ -1,23 +1,12 @@
 ﻿using MelonLoader;
-using MelonLoader.Utils;
-using Newtonsoft.Json;
 using HarmonyLib;
-using System.Reflection;
-
-
-
 
 #if MONO_BUILD
-using ScheduleOne;
-using ScheduleOne.DevUtilities;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.NPCs;
 using ScheduleOne.StationFramework;
 #else
-
-using Il2CppScheduleOne;
-using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.NPCs;
@@ -139,6 +128,7 @@ namespace ProduceMore
 			stationSpeeds.CreateEntry<float>("PackagingStation", 1f, "Packaging Station", false);
 			stationSpeeds.CreateEntry<float>("PackagingStationMk2", 1f, "Packaging Station Mk2", false);
 			stationSpeeds.CreateEntry<float>("Pot", 1f, "Pot", false);
+			stationSpeeds.CreateEntry<float>("MushroomBed", 1f, "MushroomBed", false);
 
 			stationCapacities.CreateEntry<int>("DryingRack", 20, "Drying Rack", false);
 			stationCapacities.CreateEntry<int>("MixingStation", 10, "Mixing Station", false);
@@ -398,6 +388,9 @@ namespace ProduceMore
 // really, *actually* cleanly shutdown coroutines on quit to menu - done
 // use packaging station mk2 speed for packaging station mk2 - done
 // rework employee walk speed multiplier, again - done
+// shrooms update -- rework PotPatches - needs testing
+// shrooms update -- mushroom bed acceleration - needs testing
+// make utils properly generic - done
 
 
 // Bugs:
