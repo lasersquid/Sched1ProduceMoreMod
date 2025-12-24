@@ -129,6 +129,7 @@ namespace ProduceMore
 			stationSpeeds.CreateEntry<float>("PackagingStationMk2", 1f, "Packaging Station Mk2", false);
 			stationSpeeds.CreateEntry<float>("Pot", 1f, "Pot", false);
 			stationSpeeds.CreateEntry<float>("MushroomBed", 1f, "MushroomBed", false);
+			stationSpeeds.CreateEntry<float>("SpawnStation", 1f, "SpawnStation", false);
 
 			stationCapacities.CreateEntry<int>("DryingRack", 20, "Drying Rack", false);
 			stationCapacities.CreateEntry<int>("MixingStation", 10, "Mixing Station", false);

@@ -1513,7 +1513,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool OnMinPassPrefix(ShroomColony __instance)
         {
-            int growTime = (int)Utils.GetProperty<ShroomColony>("_growTime", __instance);
+            int growTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
             float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
             Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [(currentGrowthRate / ((float)growTime * 60f))]);
             return false;
@@ -1524,7 +1524,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool OnTimeSkipped(ShroomColony __instance, int mins)
         {
-            int growTime = (int)Utils.GetProperty<ShroomColony>("_growTime", __instance);
+            int growTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
             float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
             Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [(currentGrowthRate / ((float)growTime * 60f * (float)mins))]);
             if (InstanceFinder.IsServer)
@@ -1532,6 +1532,50 @@ namespace ProduceMore
                 Utils.CallMethod<ShroomColony>("SetGrowthPercentage_Local", __instance, [null, __instance.GrowthProgress]);
             }
             return false;
+        }
+
+        [HarmonyPatch(typeof(UseSpawnStationBehaviour), "RpcLogic___BeginWork_2166136261")]
+        [HarmonyPrefix]
+        public static bool RpcLogicBeginWorkPrefix(UseSpawnStationBehaviour __instance)
+        {
+            if (__instance._currentlyUsingStation)
+            {
+                return false;
+            }
+            if (!__instance.IsStationReady(__instance.Station))
+            {
+                return false;
+            }
+            __instance._currentlyUsingStation = true;
+            if (InstanceFinder.IsServer)
+            {
+                __instance.Station.SetNPCUser(__instance.Npc.NetworkObject);
+            }
+            __instance._workRoutine = (Coroutine)Utils.StartCoroutine(SpawnStationCoroutine(__instance));
+            return false;
+        }
+
+        public static IEnumerator SpawnStationCoroutine(UseSpawnStationBehaviour behaviour)
+        {
+            float stationSpeed = Utils.Mod.GetStationSpeed("SpawnStation");
+            behaviour.Npc.SetAnimationBool("UsePackagingStation", true);
+            float progress = 0f;
+            while (progress < Mathf.Max(0.1f, 6f / stationSpeed))
+            {
+                progress += Time.deltaTime;
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.UIPoint.position, 0, true);
+                yield return null;
+            }
+            if (InstanceFinder.IsServer && behaviour.Station != null && behaviour.Station.DoesStationContainRequiredItems() && behaviour.Station.DoesStationHaveOutputSpace())
+            {
+                SporeSyringeDefinition sporeSyringeDefinition = behaviour.Station.SyringeSlot.ItemInstance.Definition as SporeSyringeDefinition;
+                behaviour.Station.SyringeSlot.ChangeQuantity(-1, false);
+                behaviour.Station.GrainBagSlot.ChangeQuantity(-1, false);
+                behaviour.Station.OutputSlot.AddItem(sporeSyringeDefinition.SpawnDefinition.GetDefaultInstance(1), false);
+            }
+            behaviour.StopWork();
+            behaviour.Disable_Networked(null);
+            yield break;
         }
     }
 
@@ -1693,8 +1737,53 @@ namespace ProduceMore
             }
             return false;
         }
+
     }
 
+    [HarmonyPatch]
+    public class PotActionDurationPatches
+    {
+        [HarmonyTargetMethods]
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            List<MethodBase> methods = new List<MethodBase>();
+            methods.Add(AccessTools.Method(typeof(HarvestPotBehaviour), "GetActionDuration"));
+            methods.Add(AccessTools.Method(typeof(AddSoilToGrowContainerBehaviour), "GetActionDuration"));
+            methods.Add(AccessTools.Method(typeof(ApplyAdditiveToGrowContainerBehaviour), "GetActionDuration"));
+            methods.Add(AccessTools.Method(typeof(SowSeedInPotBehaviour), "GetActionDuration"));
+            methods.Add(AccessTools.Method(typeof(WaterPotBehaviour), "GetActionDuration"));
+
+            return methods;
+        }
+
+        [HarmonyPatch]
+        [HarmonyPostfix]
+        public static void GetActionDurationPostfix(ref float __result)
+        {
+            __result = Utils.Mod.GetStationSpeed("Pot") * __result;
+        }
+    }
+
+    [HarmonyPatch]
+    public class ShroomActionDurationPatches
+    {
+        [HarmonyTargetMethods]
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            List<MethodBase> methods = new List<MethodBase>();
+            methods.Add(AccessTools.Method(typeof(HarvestMushroomBedBehaviour), "GetActionDuration"));
+            methods.Add(AccessTools.Method(typeof(ApplySpawnToMushroomBedBehaviour), "GetActionDuration"));
+
+            return methods;
+        }
+
+        [HarmonyPatch]
+        [HarmonyPostfix]
+        public static void GetActionDurationPostfix(ref float __result)
+        {
+            __result = Utils.Mod.GetStationSpeed("MushroomBed") * __result;
+        }
+    }
 
     // chemistry station patches
     [HarmonyPatch]
