@@ -103,7 +103,6 @@ namespace ProduceMore
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
 		}
 
-
 		private void InitializeMelonPreferences()
 		{
 			stationSpeeds = MelonPreferences.CreateCategory("ProduceMore_01_station_speeds", "Station Speeds (1=normal, 2=double, 0.5=half)");
@@ -148,6 +147,7 @@ namespace ProduceMore
 			employeeAnimation.CreateEntry<float>("PackagingStationAcceleration", 1f, "Packaging Station animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("PackagingStationMk2Acceleration", 1f, "Packaging Station Mk2 animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("PotAcceleration", 1f, "Pot animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("SpawnStationAcceleration", 1f, "SpawnStation animation speed modifier", false);
 
 			stackSizes.CreateEntry<int>("Agriculture", 10, "Agriculture", false);
 			stackSizes.CreateEntry<int>("Cash", 1000, "Cash", false);
