@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
-using Il2CppScheduleOne.Lighting;
 
 #if MONO_BUILD
 using FishNet;
@@ -14,6 +13,7 @@ using ScheduleOne.Employees;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Lighting;
 using ScheduleOne.Management;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.NPCs;
@@ -46,6 +46,7 @@ using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Lighting;
 using Il2CppScheduleOne.Management;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
@@ -1620,8 +1621,10 @@ namespace ProduceMore
             {
                 return;
             }
-            float growthRate = __instance.GetCurrentGrowthRate() * (Utils.Mod.GetStationSpeed("MushroomBed") - 1f);
-            __instance.ChangeGrowthPercentage(growthRate / ((float)__instance._growTime * 60f));
+            float growthRate = ((float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance)) * (Utils.Mod.GetStationSpeed("MushroomBed") - 1f);
+            int growTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
+            float percentage = growthRate / ((float)growTime * 60f);
+            Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [percentage]);
         }
     }
 
