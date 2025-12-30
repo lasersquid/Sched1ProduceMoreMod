@@ -15,7 +15,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.0.11", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.0", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -45,6 +45,7 @@ namespace ProduceMore
 		public MelonPreferences_Category employeeAnimation;
 		public MelonPreferences_Category stackSizes;
 		public MelonPreferences_Category stackOverrides;
+		bool preferencesInitialized = false;
 
 		public IEqualityComparer<UnityEngine.Object> unityComparer;
 		public HashSet<GridItem> processedStationCapacities;
@@ -83,7 +84,10 @@ namespace ProduceMore
 		{
 			foreach (object coroutine in runningCoroutines)
 			{
-				MelonCoroutines.Stop(coroutine);
+				if (coroutine != null)
+				{
+					MelonCoroutines.Stop(coroutine);
+				}
 			}
 			runningCoroutines.Clear();
 		}
@@ -101,6 +105,20 @@ namespace ProduceMore
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
 			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
+
+			if (preferencesInitialized)
+			{
+				ReloadMelonPreferences();
+			}
+		}
+
+		private void ReloadMelonPreferences()
+		{
+			stationSpeeds.LoadFromFile(false);
+			stationCapacities.LoadFromFile(false);
+			employeeAnimation.LoadFromFile(false);
+			stackSizes.LoadFromFile(false);
+			stackOverrides.LoadFromFile(false);
 		}
 
 		private void InitializeMelonPreferences()
@@ -127,8 +145,7 @@ namespace ProduceMore
 			stationSpeeds.CreateEntry<float>("PackagingStation", 1f, "Packaging Station", false);
 			stationSpeeds.CreateEntry<float>("PackagingStationMk2", 1f, "Packaging Station Mk2", false);
 			stationSpeeds.CreateEntry<float>("Pot", 1f, "Pot", false);
-			stationSpeeds.CreateEntry<float>("MushroomBed", 1f, "MushroomBed", false);
-			stationSpeeds.CreateEntry<float>("SpawnStation", 1f, "SpawnStation", false);
+			stationSpeeds.CreateEntry<float>("MushroomBed", 1f, "Mushroom Bed", false);
 
 			stationCapacities.CreateEntry<int>("DryingRack", 20, "Drying Rack", false);
 			stationCapacities.CreateEntry<int>("MixingStation", 10, "Mixing Station", false);
@@ -144,10 +161,11 @@ namespace ProduceMore
 			employeeAnimation.CreateEntry<float>("DryingRackAcceleration", 1f, "Drying Rack animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("MixingStationAcceleration", 1f, "Mixing Station animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("MixingStationMk2Acceleration", 1f, "Mixing Station Mk2 animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("MushroomBedAcceleration", 1f, "Mushroom Bed animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("PackagingStationAcceleration", 1f, "Packaging Station animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("PackagingStationMk2Acceleration", 1f, "Packaging Station Mk2 animation speed modifier", false);
 			employeeAnimation.CreateEntry<float>("PotAcceleration", 1f, "Pot animation speed modifier", false);
-			employeeAnimation.CreateEntry<float>("SpawnStationAcceleration", 1f, "SpawnStation animation speed modifier", false);
+			employeeAnimation.CreateEntry<float>("SpawnStationAcceleration", 1f, "Spawn Station animation speed modifier", false);
 
 			stackSizes.CreateEntry<int>("Agriculture", 10, "Agriculture", false);
 			stackSizes.CreateEntry<int>("Cash", 1000, "Cash", false);
@@ -389,14 +407,13 @@ namespace ProduceMore
 // really, *actually* cleanly shutdown coroutines on quit to menu - done
 // use packaging station mk2 speed for packaging station mk2 - done
 // rework employee walk speed multiplier, again - done
-// shrooms update -- rework PotPatches - needs testing
-// shrooms update -- mushroom bed acceleration - needs testing
 // make utils properly generic - done
+// shrooms update -- rework PotPatches into GrowContainerPatches - done
+// shrooms update -- mushroom bed acceleration - done
+// shrooms update -- spawn station acceleration - done
+// fix melonpreferences bug where changes are not picked up until reload - done (v1.1.0)
 
 
 // Bugs:
-//	- Employee walk speed multiplier no longer works -- fixed
-//	- Employees get stuck stopped by their destination, but won't proceed until interacted with -- fixed
-//	- Employees get stuck oscillating at narrow gaps when walk speed is turned up -- fixed
-//	- Employee inventory is cleared on save & load - not my bug
+// melonpreferences changes not picked up until reload - fixed
 

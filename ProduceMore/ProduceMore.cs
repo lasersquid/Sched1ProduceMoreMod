@@ -202,6 +202,7 @@ namespace ProduceMore
             return o.TryCast<T>() != null;
         }
 #endif
+
 #if MONO_BUILD
         public static Type GetType(object o)
         {
@@ -519,7 +520,6 @@ namespace ProduceMore
             if (!Utils.Mod.originalStationTimes.ContainsKey("DryingRack"))
             {
                 Utils.Mod.originalStationTimes["DryingRack"] = DryingRack.DRY_MINS_PER_TIER;
-
             }
 
             float stationSpeed = (float)Utils.Mod.originalStationTimes["DryingRack"] / Utils.Mod.GetStationSpeed("DryingRack");
@@ -967,7 +967,6 @@ namespace ProduceMore
                     __instance.MixTimePerItem = (int)Mathf.Max((float)Utils.Mod.originalStationTimes["MixingStation"] / Utils.Mod.GetStationSpeed("MixingStation"), 1f);
                 }
 
-                // TODO: check if it's even necessary to modify this field anymore
                 Utils.Mod.processedStationSpeeds.Add(__instance);
             }
 
@@ -1641,19 +1640,29 @@ namespace ProduceMore
                 behaviour.Station.GrainBagSlot.ChangeQuantity(-1, false);
                 behaviour.Station.OutputSlot.AddItem(sporeSyringeDefinition.SpawnDefinition.GetDefaultInstance(1), false);
             }
-            Utils.CallMethod<UseSpawnStationBehaviour>("StopWork", behaviour);
+
+            try
+            {
+                Utils.CallMethod<UseSpawnStationBehaviour>("StopWork", behaviour);
+            }
+            catch (Exception e)
+            {
+                // This is expected.
+                // For compatibility with AutoRestock, we need a non-destructive prefix for StopWork.
+                // However, StopWork's original method body will throw an exception when it tries to stop a null coroutine.
+                // We don't really care; we already stopped that coroutine. Catch the exception and continue.
+            }
             behaviour.Disable_Networked(null);
             yield break;
         }
 
         [HarmonyPatch(typeof(UseSpawnStationBehaviour), "StopWork")]
         [HarmonyPrefix]
-        public static bool StopWork(UseSpawnStationBehaviour __instance)
+        public static void StopWorkPrefix(UseSpawnStationBehaviour __instance)
         {
             object workRoutine = Utils.GetField<UseSpawnStationBehaviour>("_workRoutine", __instance);
             Utils.StopCoroutine(workRoutine);
             Utils.SetField<UseSpawnStationBehaviour>("_workRoutine", __instance, null);
-            return false;
         }
     }
 
@@ -1675,11 +1684,11 @@ namespace ProduceMore
         {
             { typeof(AddSoilToGrowContainerBehaviour), 15f },
             { typeof(ApplyAdditiveToGrowContainerBehaviour), 10f },
-            { typeof(HarvestPotBehaviour), 1f },
+            { typeof(HarvestPotBehaviour), 10f },
             { typeof(SowSeedInPotBehaviour), 10f },
             { typeof(WaterPotBehaviour), 10f },
             { typeof(ApplySpawnToMushroomBedBehaviour), 15f },
-            { typeof(HarvestMushroomBedBehaviour), 1f },
+            { typeof(HarvestMushroomBedBehaviour), 10f },
             { typeof(MistMushroomBedBehaviour), 10f }
         };
         private static List<Type> harvestBehaviours = new List<Type>()
@@ -1776,7 +1785,7 @@ namespace ProduceMore
             }
             else
             {
-                Utils.Warn($"Couldn't get quantity to harvest from behaviour {behaviour.GetType().Name}");
+                Utils.Warn($"Couldn't get quantity to harvest from behaviour {Utils.GetType(behaviour).Name}");
             }
 
             return Mathf.Min(new int[] { productCount, botanistCapacity, destinationCapacity, outputCapacity });
