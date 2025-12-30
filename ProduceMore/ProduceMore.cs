@@ -5,8 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
-
-
+using Il2CppScheduleOne.Lighting;
 
 #if MONO_BUILD
 using FishNet;
@@ -285,6 +284,13 @@ namespace ProduceMore
             Utils.Mod.LoggerInstance.Warning(message);
         }
 
+        public static bool ModIsLoaded(string name)
+        {
+            List<MelonBase> registeredMelons = new List<MelonBase>(MelonBase.RegisteredMelons);
+            MelonBase melon = registeredMelons.Find(new Predicate<MelonBase>(m => m.Info.Name == name));
+            return (melon != null);
+        }
+
         // Compare unity objects by their instance ID
         public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
         {
@@ -485,7 +491,6 @@ namespace ProduceMore
             }
         }
 
-
         // Modify DryingRack.ItemCapacity
         // canstartoperation runs every time a player or npc tries to interact
         // may have optimized away real access to ItemCapacity; replace method body
@@ -510,7 +515,6 @@ namespace ProduceMore
 
             return false;
         }
-
 
         // fix drying operation progress meter
         [HarmonyPatch(typeof(DryingOperationUI), "UpdatePosition")]
@@ -553,7 +557,6 @@ namespace ProduceMore
             __result = __instance.StartQuality;
         }
 
-
         // modified copy of DryingRack.MinPass
         [HarmonyPatch(typeof(DryingRack), "MinPass")]
         [HarmonyPrefix]
@@ -587,7 +590,6 @@ namespace ProduceMore
             }
             return false;
         }
-
 
         // speed up employees hanging up leaves
         [HarmonyPatch(typeof(StartDryingRackBehaviour), "RpcLogic___BeginAction_2166136261")]
@@ -1553,44 +1555,73 @@ namespace ProduceMore
     public class GrowablePatches
     {
         // plant speed
-        // Can't patch Pot.GetAverageLightExposure in IL2CPP--optimized out
-        // maybe NormalizedGrowthProgress setter? 
-        [HarmonyPatch(typeof(Plant), "NormalizedGrowthProgress", MethodType.Setter)]
-        [HarmonyPrefix]
-        public static bool PlantNormalizedGrowthProgressSetterPrefix(Plant __instance, float value)
+        // Can't patch Pot.GetAverageLightExposure in IL2CPP--optimized out entirely
+        // maybe NormalizedGrowthProgress setter? -- inlined
+        // just postfix minpass
+        [HarmonyPatch(typeof(Plant), "MinPass")]
+        [HarmonyPostfix]
+        public static void MinPassPostfix(Plant __instance, int mins)
         {
-            float newValue;
-            if (value <= 0)
+            if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Utils.Mod.plantsAlwaysGrowPresent)
             {
-                newValue = Mathf.Clamp01(value);
+                return;
             }
-            else
+
+            // In order to calculate delta, we need to know original growth speed.
+            // Just do this calculation again I guess.
+            float num = 1f / ((float)__instance.GrowthTime * 60f) * (float)mins;
+            num *= __instance.Pot.GetTemperatureGrowthMultiplier();
+            float num2;
+            num *= GetAverageLightExposure(__instance.Pot, out num2);
+            num *= __instance.Pot.GrowSpeedMultiplier;
+            num *= num2;
+            if (GameManager.IS_TUTORIAL)
             {
-                float delta = value - __instance.NormalizedGrowthProgress;
-                newValue = Mathf.Clamp01(value + (delta * Utils.Mod.GetStationSpeed("Pot")));
+                num *= 0.3f;
             }
-            Utils.SetField<Plant>("<NormalizedGrowthProgress>k__BackingField", __instance, newValue);
-            return false;
+            if (__instance.Pot.NormalizedMoistureAmount <= 0f)
+            {
+                num *= 0f;
+            }
+
+            float growthSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
+            __instance.SetNormalizedGrowthProgress(__instance.NormalizedGrowthProgress + (num * (growthSpeed - 1f)));
+        }
+
+        // This function has been optimized out completely--vtable entry is blank??
+        // Call a local copy
+        private static float GetAverageLightExposure(GrowContainer container, out float growSpeedMultiplier)
+        {
+            growSpeedMultiplier = 1f;
+            UsableLightSource lightSourceOverride = Utils.GetField<GrowContainer, UsableLightSource>("_lightSourceOverride", container);
+            if (lightSourceOverride != null)
+            {
+                return lightSourceOverride.GrowSpeedMultiplier;
+            }
+            float num = 0f;
+            for (int i = 0; i < container.CoordinatePairs.Count; i++)
+            {
+                float num2;
+                num += container.OwnerGrid.GetTile(container.CoordinatePairs[i].coord2).LightExposureNode.GetTotalExposure(out num2);
+                growSpeedMultiplier += num2;
+            }
+            growSpeedMultiplier /= (float)container.CoordinatePairs.Count;
+            return num / (float)container.CoordinatePairs.Count;
         }
 
         // shroom speed
-        // Same as above. Just patch the setter.
-        [HarmonyPatch(typeof(ShroomColony), "GrowthProgress", MethodType.Setter)]
-        [HarmonyPrefix]
-        public static bool ShroomGrowthProgressSetterPrefix(ShroomColony __instance, float value)
+        // growthprogress setter access inlined.
+        // do a minpass postfix instead.
+        [HarmonyPatch(typeof(ShroomColony), "OnMinPass")]
+        [HarmonyPostfix]
+        public static void OnMinPassPostfix(ShroomColony __instance)
         {
-            float newValue;
-            if (value <= 0)
+            if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Utils.Mod.plantsAlwaysGrowPresent)
             {
-                newValue = Mathf.Clamp01(value);
+                return;
             }
-            else
-            {
-                float delta = value - __instance.GrowthProgress;
-                newValue = Mathf.Clamp01(value + (delta * Utils.Mod.GetStationSpeed("MushroomBed")));
-            }
-            Utils.SetField<ShroomColony>("<GrowthProgress>k__BackingField", __instance, newValue);
-            return false;
+            float growthRate = __instance.GetCurrentGrowthRate() * (Utils.Mod.GetStationSpeed("MushroomBed") - 1f);
+            __instance.ChangeGrowthPercentage(growthRate / ((float)__instance._growTime * 60f));
         }
     }
 
@@ -1761,7 +1792,7 @@ namespace ProduceMore
             int destinationCapacity = 0;
             int outputCapacity = 0;
 
-            Botanist botanist = Utils.GetField<GrowContainerBehaviour, Botanist>("_botanist", behaviour);
+            Botanist botanist = Utils.GetProperty<GrowContainerBehaviour, Botanist>("_botanist", behaviour);
 
             if (Utils.Is<HarvestPotBehaviour>(behaviour))
             {

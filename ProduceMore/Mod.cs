@@ -15,7 +15,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.0", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.1", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -59,6 +59,8 @@ namespace ProduceMore
 		public Dictionary<StationRecipe, int> originalRecipeTimes;
 		public HashSet<NPC> registeredEmployees;
 		public List<object> runningCoroutines;
+		public bool plantsAlwaysGrowPresent = false;
+		public bool checkedMelons = false;
 
 		public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.producemore");
 
@@ -68,6 +70,19 @@ namespace ProduceMore
 			Utils.SetMod(this);
 			LoggerInstance.Msg("Initialized.");
 		}
+
+        public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+        {
+            base.OnSceneWasLoaded(buildIndex, sceneName);
+			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
+			{
+				if (!checkedMelons)
+				{
+					plantsAlwaysGrowPresent = Utils.ModIsLoaded("PlantsAlwaysGrowMod");
+					checkedMelons = true;
+				}
+			}
+        }
 
         public override void OnSceneWasUnloaded(int buildIndex, string sceneName)
         {
@@ -412,6 +427,7 @@ namespace ProduceMore
 // shrooms update -- mushroom bed acceleration - done
 // shrooms update -- spawn station acceleration - done
 // fix melonpreferences bug where changes are not picked up until reload - done (v1.1.0)
+// fix using getfield instead of getproperty for growcontainerbehaviour._botanist - done (v1.1.1)
 
 
 // Bugs:
