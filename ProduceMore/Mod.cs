@@ -15,7 +15,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.1", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.2", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -67,7 +67,7 @@ namespace ProduceMore
 		public override void OnInitializeMelon()
 		{
 			InitializeMelonPreferences();
-			Utils.SetMod(this);
+			Utils.Initialize(this);
 			LoggerInstance.Msg("Initialized.");
 		}
 
@@ -78,9 +78,10 @@ namespace ProduceMore
 			{
 				if (!checkedMelons)
 				{
-					plantsAlwaysGrowPresent = Utils.ModIsLoaded("PlantsAlwaysGrowMod");
+					plantsAlwaysGrowPresent = Utils.OtherModIsLoaded("PlantsAlwaysGrowMod");
 					checkedMelons = true;
 				}
+				Utils.LateInitialize();
 			}
         }
 
@@ -89,8 +90,6 @@ namespace ProduceMore
             base.OnSceneWasUnloaded(buildIndex, sceneName);
 			if (sceneName.ToLower().Contains("main") || sceneName.ToLower().Contains("tutorial"))
 			{
-				LoggerInstance.Msg("Scene unloaded, resetting state.");
-				StopCoroutines();
 				ResetState();
 			}
         }
@@ -120,20 +119,6 @@ namespace ProduceMore
 			processedStationTimes = new HashSet<GridItem>(unityComparer);
 			processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
 			processedRecipes = new HashSet<StationRecipe>(unityComparer);
-
-			if (preferencesInitialized)
-			{
-				ReloadMelonPreferences();
-			}
-		}
-
-		private void ReloadMelonPreferences()
-		{
-			stationSpeeds.LoadFromFile(false);
-			stationCapacities.LoadFromFile(false);
-			employeeAnimation.LoadFromFile(false);
-			stackSizes.LoadFromFile(false);
-			stackOverrides.LoadFromFile(false);
 		}
 
 		private void InitializeMelonPreferences()
@@ -249,6 +234,7 @@ namespace ProduceMore
 
 			return stackLimit;
 		}
+
 		public int GetStackLimit(ItemDefinition itemDef)
 		{
 			int stackLimit = 10;
@@ -428,6 +414,9 @@ namespace ProduceMore
 // shrooms update -- spawn station acceleration - done
 // fix melonpreferences bug where changes are not picked up until reload - done (v1.1.0)
 // fix using getfield instead of getproperty for growcontainerbehaviour._botanist - done (v1.1.1)
+// fix (or at least improve) employees getting stuck - improved
+// fix cauldron output capacity check - done
+// find earlier hook to stop coroutines than OnSceneChanged - done (v1.1.2)
 
 
 // Bugs:
