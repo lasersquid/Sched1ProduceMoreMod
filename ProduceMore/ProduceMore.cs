@@ -12,6 +12,7 @@ using ScheduleOne.DevUtilities;
 using ScheduleOne.Employees;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
+using ScheduleOne.Growing;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Lighting;
 using ScheduleOne.Management;
@@ -23,21 +24,20 @@ using ScheduleOne.Persistence;
 using ScheduleOne.Product.Packaging;
 using ScheduleOne.Product;
 using ScheduleOne.StationFramework;
+using ScheduleOne.Trash;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI.Management;
 using ScheduleOne.UI.Phone.Delivery;
 using ScheduleOne.UI.Shop;
 using ScheduleOne.UI.Stations.Drying_rack;
 using ScheduleOne.UI.Stations;
+using ScheduleOne.UI;
 using ScheduleOne.Variables;
 using ScheduleOne;
-using ScheduleOne.Growing;
-using ScheduleOne.Trash;
 using StringArray = string[];
 using ItemInstanceList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemInstance>;
 using MixingStationList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.MixingStation>;
-using Action = System.Action;
-using Exception = System.Exception;
+using ChemStationList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.ChemistryStation>;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
@@ -46,6 +46,7 @@ using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.Growing;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Lighting;
 using Il2CppScheduleOne.Management;
@@ -59,6 +60,7 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product.Packaging;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.StationFramework;
+using Il2CppScheduleOne.Trash;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI.Management;
 using Il2CppScheduleOne.UI.Phone.Delivery;
@@ -68,14 +70,11 @@ using Il2CppScheduleOne.UI.Stations;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.Variables;
 using Il2CppScheduleOne;
-using Il2CppScheduleOne.Growing;
-using Il2CppScheduleOne.Trash;
 using Il2CppTMPro;
 using StringArray = Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray;
 using ItemInstanceList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemInstance>;
 using MixingStationList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.MixingStation>;
-using Action = System.Action;
-using Exception = System.Exception;
+using ChemStationList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.ChemistryStation>;
 #endif
 
 namespace ProduceMore
@@ -99,6 +98,7 @@ namespace ProduceMore
             LoadManager.Instance.onPreSceneChange.AddListener(Utils.ToUnityAction(OnPreSceneChange));
         }
 
+        // Stop coroutines when a scene change is initiated.
         private static void OnPreSceneChange()
         {
             Mod.StopCoroutines();
@@ -106,6 +106,8 @@ namespace ProduceMore
 
         // Reflection convenience methods.
         // Needed to access private members in mono.
+        // Also handles the property-fying of fields in IL2CPP.
+        // Treturn cannot be an interface type in IL2CPP; use ToInterface for that.
 
         public static Treturn GetField<Ttarget, Treturn>(string fieldName, object target) where Treturn : class
         {
@@ -130,7 +132,7 @@ namespace ProduceMore
 #endif
         }
 
-        public static Treturn GetProperty<Ttarget, Treturn>(string fieldName, object target) where Treturn : class
+        public static Treturn GetProperty<Ttarget, Treturn>(string fieldName, object target)
         {
             return (Treturn)GetProperty<Ttarget>(fieldName, target);
         }
@@ -145,17 +147,17 @@ namespace ProduceMore
             AccessTools.Property(typeof(Ttarget), fieldName).SetValue(target, value);
         }
 
-        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target) where Treturn : class
+        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target)
         {
             return (Treturn)CallMethod<Ttarget>(methodName, target, []);
         }
 
-        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target, object[] args) where Treturn : class
+        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target, object[] args)
         {
             return (Treturn)CallMethod<Ttarget>(methodName, target, args);
         }
 
-        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, Type[] argTypes, object target, object[] args) where Treturn : class
+        public static Treturn CallMethod<Ttarget, Treturn>(string methodName, Type[] argTypes, object target, object[] args)
         {
             return (Treturn)CallMethod<Ttarget>(methodName, argTypes, target, args);
         }
@@ -180,6 +182,7 @@ namespace ProduceMore
 
         // In IL2CPP, do a type check before performing a forced cast, returning default (usually null) on failure.
         // In Mono, do a type check before a regular cast, returning default on type check failure.
+        // You can't use CastTo with T as an Il2Cpp interface; use ToInterface for that.
 #if MONO_BUILD
         public static T CastTo<T>(object o)
         {
@@ -197,7 +200,7 @@ namespace ProduceMore
         {
             if (typeof(T).IsAssignableFrom(GetType(o)))
             {
-                return (T)System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]);
+                return (T)System.Activator.CreateInstance(typeof(T), [o.Pointer]);
             }
             return default(T);
         }
@@ -207,6 +210,7 @@ namespace ProduceMore
         // instead of checking object identity. 
         // Check against actual object type obtained via GetType.
         // In Mono, use standard "is" operator.
+        // Will always return false for Il2Cpp interfaces.
 #if MONO_BUILD
         public static bool Is<T>(object o)
         {
@@ -219,7 +223,7 @@ namespace ProduceMore
         }
 #endif
 
-        // You can't cast to or from an interface type in IL2CPP, since interface info is stripped.
+        // You can't cast to an interface type in IL2CPP, since interface info is stripped.
         // Use this method to perform a blind cast without type checking.
         // In Mono, just do a regular cast.
 #if MONO_BUILD
@@ -230,7 +234,7 @@ namespace ProduceMore
 #else
         public static T ToInterface<T>(Il2CppObjectBase o) where T : Il2CppObjectBase
         {
-            return (T)System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]);
+            return (T)System.Activator.CreateInstance(typeof(T), [o.Pointer]);
         }
 #endif
 
@@ -254,7 +258,7 @@ namespace ProduceMore
         }
 #endif
 
-        // Convert a regular action to a unity action.
+        // Convert a System.Action to a unity action.
         public static UnityAction ToUnityAction(Action action)
         {
 #if MONO_BUILD
@@ -273,14 +277,27 @@ namespace ProduceMore
 #endif
         }
 
+        // Convert a delegate to a predicate.
+#if MONO_BUILD
+        public static Predicate<T> ConvertToPredicate<T>(Func<T, bool> func)
+        {
+            return new Predicate<T>(func);
+        }
+#else
+        public static Il2CppSystem.Predicate<T> ConvertToPredicate<T>(Func<T, bool> func)
+        {
+            return DelegateSupport.ConvertDelegate<Il2CppSystem.Predicate<T>>(func);
+        }
+#endif
+
         public static void Log(string message)
         {
-            Utils.Mod.LoggerInstance.Msg(message);
+            Mod.LoggerInstance.Msg(message);
         }
 
         public static void Warn(string message)
         {
-            Utils.Mod.LoggerInstance.Warning(message);
+            Mod.LoggerInstance.Warning(message);
         }
 
         public static void PrintException(Exception e)
@@ -302,6 +319,7 @@ namespace ProduceMore
             }
         }
 
+        // Check if a particular MelonMod is loaded.
         public static bool OtherModIsLoaded(string modName)
         {
             List<MelonBase> registeredMelons = new List<MelonBase>(MelonBase.RegisteredMelons);
@@ -322,6 +340,8 @@ namespace ProduceMore
                 return item.GetInstanceID();
             }
         }
+
+        // Mod-specific helper functions
 
         // Start coroutine and add it to the list.
         public static object StartCoroutine(IEnumerator func)
@@ -368,19 +388,46 @@ namespace ProduceMore
                 { typeof(MushroomSpawnStation), "SpawnStation" }
         };
 
+        // Does NOT modify station capacity; handle that in patches
         public static void AddStationCapacity(GridItem station, int capacity)
         {
             string stationString = typeStrings.GetValueOrDefault(GetType(station));
             if (!Mod.processedStationCapacities.Contains(station))
             {
-                Mod.originalStationCapacities.TryAdd(stationString, capacity);
+                if (!Mod.originalStationCapacities.ContainsKey(stationString))
+                {
+                    Mod.originalStationCapacities.Add(stationString, capacity);
+                }
                 Mod.processedStationCapacities.Add(station);
             }
         }
 
-        public static void AddItemCapacity(ItemDefinition itemDefinition)
+        // Does NOT modify station time; handle that in patches
+        public static void AddOriginalStationTime(GridItem station, int time)
         {
-            if (!Utils.Mod.processedItemDefs.Contains(itemDefinition) && itemDefinition.Name.ToLower() != "cash")
+            string stationString = typeStrings.GetValueOrDefault(GetType(station));
+            if (!Mod.processedStationTimes.Contains(station))
+            {
+                if (!Mod.originalStationTimes.ContainsKey(stationString))
+                {
+                    Mod.originalStationTimes.Add(stationString, time);
+                }
+                Mod.processedStationTimes.Add(station);
+            }
+        }
+
+        public static void AddOriginalStationTime(string stationString, int time)
+        {
+            if (!Mod.originalStationTimes.ContainsKey(stationString))
+            {
+                Mod.originalStationTimes.TryAdd(stationString, time);
+            }
+        }
+
+        // Modifies item definition
+        public static void ModItemStackLimit(ItemDefinition itemDefinition)
+        {
+            if (!Mod.processedItemDefs.Contains(itemDefinition) && itemDefinition.Name.ToLower() != "cash")
             {
                 // Speed Grow is classified as product for some reason
                 EItemCategory category;
@@ -392,38 +439,28 @@ namespace ProduceMore
                 {
                     category = itemDefinition.Category;
                 }
-                if (!Utils.Mod.originalStackLimits.ContainsKey(category.ToString()))
+                if (!Mod.originalStackLimits.ContainsKey(category.ToString()))
                 {
-                    Utils.Mod.originalStackLimits[category.ToString()] = itemDefinition.StackLimit;
+                    Mod.originalStackLimits[category.ToString()] = itemDefinition.StackLimit;
                 }
 
-                itemDefinition.StackLimit = Utils.Mod.GetStackLimit(itemDefinition.GetDefaultInstance(1));
-                Utils.Mod.processedItemDefs.Add(itemDefinition);
+                itemDefinition.StackLimit = Mod.GetStackLimit(itemDefinition.GetDefaultInstance(1));
+                Mod.processedItemDefs.Add(itemDefinition);
             }
         }
 
-        public static void AddStationTime(GridItem station, int time)
+        // Modifies recipe definition
+        public static void ModRecipeTime(StationRecipe recipe, float stationSpeed)
         {
-            string stationString = typeStrings.GetValueOrDefault(GetType(station));
-            if (!Mod.processedStationTimes.Contains(station))
+            if (!Mod.processedRecipes.Contains(recipe))
             {
-                Mod.originalStationTimes.TryAdd(stationString, time);
-                Mod.processedStationTimes.Add(station);
-            }
-        }
-
-        public static void AddRecipeTime(StationRecipe recipe, int time)
-        {
-            if (!Utils.Mod.processedRecipes.Contains(recipe))
-            {
-                if (!Utils.Mod.originalRecipeTimes.ContainsKey(recipe))
+                if (!Mod.originalRecipeTimes.ContainsKey(recipe))
                 {
-                    Utils.Mod.originalRecipeTimes[recipe] = time;
+                    Mod.originalRecipeTimes[recipe] = recipe.CookTime_Mins;
                 }
-                int originalTime = recipe.CookTime_Mins;
-                float stationSpeed = Mod.GetStationSpeed("ChemistryStation");
-                recipe.CookTime_Mins = (int)((float)originalTime / stationSpeed);
-                Utils.Mod.processedRecipes.Add(recipe);
+                int newTime = Mathf.Max((int)((float)recipe.CookTime_Mins / stationSpeed), 1);
+                recipe.CookTime_Mins = newTime;
+                Mod.processedRecipes.Add(recipe);
             }
         }
 
@@ -456,11 +493,34 @@ namespace ProduceMore
 
         public static int GetOriginalStationTime(GridItem station)
         {
-            if (station == null)
+            int time = 10;
+            if (station != null)
             {
-                return 10;
+                string typeString = typeStrings[GetType(station)];
+                if (Mod.originalStationTimes.ContainsKey(typeString))
+                {
+                    time = Mod.originalStationTimes[typeString];
+                }
+                else
+                {
+                    Utils.Warn($"Tried to get original station time for {typeString}, but there wasn't one in the index?");
+                }
             }
-            return Mod.originalStationTimes.GetValueOrDefault(typeStrings[GetType(station)]);
+            return time;
+        }
+
+        public static int GetOriginalStationTime(string stationString)
+        {
+            int time = 1;
+            if (!Mod.originalStationTimes.ContainsKey(stationString))
+            {
+                Utils.Warn($"Tried to get original station time for {stationString}, but there wasn't one in the index?");
+            }
+            else
+            {
+                time = Mod.originalStationTimes[stationString];
+            }
+            return time;
         }
     }
 
@@ -473,7 +533,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void StackLimitPrefix(ItemInstance __instance)
         {
-            Utils.AddItemCapacity(__instance.Definition);
+            Utils.ModItemStackLimit(__instance.Definition);
         }
 
         // For when we first encounter an itemdef via the phone delivery app
@@ -481,17 +541,37 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void InitializePrefix(ShopListing match)
         {
-            if (match != null)
+            if (match != null && match.Item != null)
             {
-                Utils.AddItemCapacity(match.Item);
+                Utils.ModItemStackLimit(match.Item);
             }
         }
 
-        // update item slots to report accurate capacity
+        [HarmonyPatch(typeof(ItemSlotUI), "UpdateUI")]
+        [HarmonyPostfix]
+        public static void UpdateUIPostfix(ItemSlotUI __instance)
+        {
+            if (__instance.assignedSlot != null && __instance.assignedSlot.ItemInstance != null)
+            {
+                Utils.ModItemStackLimit(__instance.assignedSlot.ItemInstance.Definition);
+            }
+        }
+
+        // update item slots to report accurate capacity.
+        // also, don't return a negative value when stacks larger than the current stacklimit are at the destination.
         [HarmonyPatch(typeof(ItemSlot), "GetCapacityForItem")]
         [HarmonyPostfix]
         public static void GetCapacityForItemPostfix(ItemSlot __instance, ref int __result, ItemInstance item, bool checkPlayerFilters)
         {
+            if (item != null)
+            {
+                Utils.ModItemStackLimit(item.Definition);
+            }
+            if (__instance.ItemInstance != null)
+            {
+                Utils.ModItemStackLimit(__instance.ItemInstance.Definition);
+            }
+
             if (!__instance.DoesItemMatchHardFilters(item))
             {
                 __result = 0;
@@ -504,7 +584,7 @@ namespace ProduceMore
             }
             if (__instance.ItemInstance == null || __instance.ItemInstance.CanStackWith(item, false))
             {
-                __result = Utils.Mod.GetStackLimit(item) - __instance.Quantity;
+                __result = Mathf.Max(item.StackLimit - __instance.Quantity, 0);
                 return;
             }
             __result = 0;
@@ -512,14 +592,25 @@ namespace ProduceMore
         }
 
         [HarmonyPatch(typeof(NPCInventory), "GetCapacityForItem")]
+        [HarmonyPrefix]
+        public static void NPCGetCapacityForItemPrefix(NPCInventory __instance, ItemInstance item, ref int __result)
+        {
+            if (item != null)
+            {
+                Utils.ModItemStackLimit(item.Definition);
+            }
+        }
+
+        // Don't return a negative value if a stack larger than the stacklimit is in NPC inventory.
+        [HarmonyPatch(typeof(NPCInventory), "GetCapacityForItem")]
         [HarmonyPostfix]
         public static void NPCGetCapacityForItemPostfix(NPCInventory __instance, ItemInstance item, ref int __result)
         {
             if (item == null)
             {
-                __result = 0;
                 return;
             }
+
             int num = 0;
             for (int i = 0; i < __instance.ItemSlots.Count; i++)
             {
@@ -527,16 +618,24 @@ namespace ProduceMore
                 {
                     if (__instance.ItemSlots[i].ItemInstance == null)
                     {
-                        num += Utils.Mod.GetStackLimit(item);
+                        num += item.StackLimit;
                     }
                     else if (__instance.ItemSlots[i].ItemInstance.CanStackWith(item, true))
                     {
-                        num += Utils.Mod.GetStackLimit(item) - __instance.ItemSlots[i].ItemInstance.Quantity;
+                        num += Mathf.Max(0, item.StackLimit - __instance.ItemSlots[i].ItemInstance.Quantity);
                     }
                 }
             }
             __result = num;
-            return;
+        }
+
+        // Call to GetCapacityForItem seems to have been optimized out.
+        // Replace with original method body.
+        [HarmonyPatch(typeof(NPCInventory), "CanItemFit")]
+        [HarmonyPostfix]
+        public static void NPCCanItemFitPrefix(NPCInventory __instance, ItemInstance item, ref bool __result)
+        {
+            __result = item != null && __instance.GetCapacityForItem(item) >= item.Quantity;
         }
     }
 
@@ -561,12 +660,10 @@ namespace ProduceMore
         {
             if (__result != null)
             {
-                Utils.AddItemCapacity(__result);
+                Utils.ModItemStackLimit(__result);
             }
-
         }
     }
-
 
     // Patch drying rack capacity and speed
     [HarmonyPatch]
@@ -583,33 +680,32 @@ namespace ProduceMore
 
         // Modify DryingRack.ItemCapacity
         // canstartoperation runs every time a player or npc tries to interact
-        // may have optimized away real access to ItemCapacity; replace method body
+        // may have optimized away real access to itemcapacity; replace method body
         [HarmonyPatch(typeof(DryingRack), "CanStartOperation")]
-        [HarmonyPrefix]
-        public static bool CanStartOperationPrefix(DryingRack __instance, ref bool __result)
+        [HarmonyPostfix]
+        public static void CanStartOperationPostfix(DryingRack __instance, ref bool __result)
         {
-            Utils.AddStationCapacity(__instance, __instance.ItemCapacity);
+            // Default capacity of drying rack not available as a constant.
+            Utils.AddStationCapacity(__instance, 20);
             __instance.ItemCapacity = Utils.GetStationCapacity(__instance);
 
             __result = __instance.GetTotalDryingItems() < __instance.ItemCapacity &&
                 __instance.InputSlot.Quantity != 0 &&
                 !__instance.InputSlot.IsLocked &&
                 !__instance.InputSlot.IsRemovalLocked;
-
-            return false;
         }
 
         // fix drying operation progress meter
         [HarmonyPatch(typeof(DryingOperationUI), "UpdatePosition")]
-        [HarmonyPrefix]
-        public static bool UpdatePositionPrefix(DryingOperationUI __instance)
+        [HarmonyPostfix]
+        public static void UpdatePositionPostfix(DryingOperationUI __instance)
         {
             DryingRack rack = Singleton<DryingRackCanvas>.Instance.Rack;
-            Utils.AddStationTime(rack, DryingRack.DRY_MINS_PER_TIER);
+            Utils.AddOriginalStationTime(rack, DryingRack.DRY_MINS_PER_TIER);
 
-            int originalStationTime = Utils.GetOriginalStationTime(rack);
+            int originalDryingTime = Utils.GetOriginalStationTime(rack);
             float stationSpeed = Utils.GetStationSpeed(rack);
-            float dryingTime = (float)originalStationTime / stationSpeed;
+            float dryingTime = (float)originalDryingTime / stationSpeed;
             float t = Mathf.Clamp01((float)__instance.AssignedOperation.Time / dryingTime);
             int num = Mathf.Clamp((int)dryingTime - __instance.AssignedOperation.Time, 0, (int)dryingTime);
             int num2 = num / 60;
@@ -618,8 +714,6 @@ namespace ProduceMore
             float num4 = -62.5f;
             float b = -num4;
             __instance.Rect.anchoredPosition = new Vector2(Mathf.Lerp(num4, b, t), 0f);
-
-            return false;
         }
 
         // speed
@@ -627,9 +721,9 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void GetQualityPostfix(DryingOperation __instance, ref EQuality __result)
         {
-            Utils.Mod.originalStationTimes.TryAdd("DryingRack", DryingRack.DRY_MINS_PER_TIER);
+            Utils.AddOriginalStationTime("DryingRack", DryingRack.DRY_MINS_PER_TIER);
 
-            int originalTime = Utils.Mod.originalStationTimes.GetValueOrDefault("DryingRack");
+            int originalTime = Utils.GetOriginalStationTime("DryingRack");
             float stationSpeed = Utils.Mod.GetStationSpeed("DryingRack");
             int dryingTime = (int)((float)originalTime / stationSpeed);
             if (__instance.Time >= dryingTime)
@@ -645,16 +739,20 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool MinPassPrefix(DryingRack __instance)
         {
-            Utils.Mod.originalStationTimes.TryAdd("DryingRack", DryingRack.DRY_MINS_PER_TIER);
-
             if (__instance == null)
             {
                 return false;
             }
+
+            Utils.AddOriginalStationTime(__instance, DryingRack.DRY_MINS_PER_TIER);
+            int originalStationTime = Utils.GetOriginalStationTime(__instance);
+            float stationSpeed = Utils.GetStationSpeed(__instance);
+            int dryingTime = (int)((float)originalStationTime / stationSpeed);
+
             foreach (DryingOperation dryingOperation in __instance.DryingOperations.ToArray())
             {
                 dryingOperation.Time++;
-                if (dryingOperation.Time >= ((float)Utils.Mod.originalStationTimes["DryingRack"] / Utils.Mod.GetStationSpeed("DryingRack")))
+                if (dryingOperation.Time >= dryingTime)
                 {
                     if (dryingOperation.StartQuality >= EQuality.Premium)
                     {
@@ -672,7 +770,7 @@ namespace ProduceMore
             return false;
         }
 
-        // speed up employees hanging up leaves
+        // call our own coroutine to speed up employees hanging up leaves
         [HarmonyPatch(typeof(StartDryingRackBehaviour), "RpcLogic___BeginAction_2166136261")]
         [HarmonyPrefix]
         public static bool Rpc_BeginActionPrefix(StartDryingRackBehaviour __instance)
@@ -697,18 +795,33 @@ namespace ProduceMore
         // Replacement coroutine for BeginAction
         private static IEnumerator BeginActionCoroutine(StartDryingRackBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.Rack);
             yield return new WaitForEndOfFrame();
-            behaviour.Rack.InputSlot.ItemInstance.GetCopy(1);
-            int itemCount = 0;
-            while (behaviour.Rack != null && behaviour.Rack.InputSlot.Quantity > itemCount && 
-                behaviour.Rack.GetTotalDryingItems() + itemCount < behaviour.Rack.ItemCapacity)
+
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.Rack);
+            float originalTimePerItem = StartDryingRackBehaviour.TIME_PER_ITEM;
+            float waitTimePerItem = originalTimePerItem / workSpeed;
+            int inputQuantity = behaviour.Rack.InputSlot.Quantity;
+            int outputCapacity = behaviour.Rack.ItemCapacity - behaviour.Rack.GetTotalDryingItems();
+            int quantityToDry = Mathf.Min(inputQuantity, outputCapacity);
+            float waitTime = Mathf.Max(0.1f, waitTimePerItem * quantityToDry);
+
+            int lastWholeSecond = 0;
+            behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
+            for (float i = 0f; i < waitTime; i += Time.deltaTime)
             {
-                behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
-                yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
-                int num = itemCount;
-                itemCount = num + 1;
+                // Look at the rack.
+                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Rack.uiPoint.position, 0, false);
+
+                // if a second passed, trigger grabitem again.
+                if (i - (float)lastWholeSecond >= 1f)
+                {
+                    behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
+                    lastWholeSecond = (int)i;
+                }
+                yield return new WaitForEndOfFrame();
             }
+            behaviour.Npc.Avatar.Animation.ResetTrigger("GrabItem");
+
             if (InstanceFinder.IsServer)
             {
                 behaviour.Rack.StartOperation();
@@ -720,9 +833,10 @@ namespace ProduceMore
             yield break;
         }
 
+        // Kill our coroutine and remove it from the list
         [HarmonyPatch(typeof(StartDryingRackBehaviour), "StopCauldron")]
         [HarmonyPrefix]
-        public static bool StopCauldronPrefix(StartDryingRackBehaviour __instance)
+        public static void StopCauldronPrefix(StartDryingRackBehaviour __instance)
         {
             object workRoutine = Utils.GetField<StartDryingRackBehaviour>("workRoutine", __instance);
             if (workRoutine != null)
@@ -732,10 +846,9 @@ namespace ProduceMore
             }
             Utils.SetProperty<StartDryingRackBehaviour>("WorkInProgress", __instance, false);
 
-            return false;
+            return;
         }
     }
-
 
     // Patch lab oven capacity and speed
     [HarmonyPatch]
@@ -746,9 +859,11 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void GetCookDurationPostfix(OvenCookOperation __instance, ref int __result)
         {
-            int originalCookTime = __instance.Ingredient.StationItem.GetModule<CookableModule>().CookTime;
+            StorableItemDefinition ingredient = __instance.Ingredient;
+            int originalCookTime = ingredient.StationItem.GetModule<CookableModule>().CookTime;
             float stationSpeed = Utils.Mod.GetStationSpeed("LabOven");
-            __result = (int)((float)originalCookTime / stationSpeed);
+            int newCookTime = (int)((float)originalCookTime / stationSpeed);
+            __result = newCookTime;
         }
 
         // call to GetCookDuration seems to have been optimized out.
@@ -765,29 +880,10 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void DoesOvenOutputHaveSpacePostfix(LabOvenCanvas __instance, ref bool __result)
         {
-            ItemInstance productInstance = __instance.Oven.CurrentOperation.Product.GetDefaultInstance(1);
-            ItemInstance outputInstance = __instance.Oven.OutputSlot.ItemInstance;
-            int capacity = 0;
-
-            // for some reason calling getcapacity here doesn't result in our postfix running
-            // parent function might be overridden in child classes maybe?
-            // for now just inline body of getcapacity
-            if (!__instance.Oven.OutputSlot.DoesItemMatchHardFilters(productInstance))
-            {
-                capacity = 0;
-            }
-            else if (outputInstance == null)
-            {
-                capacity = Utils.Mod.GetStackLimit(productInstance);
-            }
-            else if (productInstance.CanStackWith(outputInstance.Definition.GetDefaultInstance(1), false))
-            {
-                capacity = Utils.Mod.GetStackLimit(productInstance) - outputInstance.Quantity;
-            }
-
+            ItemInstance productInstance = __instance.Oven.CurrentOperation.GetProductItem(1);
             int quantityProduced = __instance.Oven.CurrentOperation.Cookable.ProductQuantity;
+            int capacity = __instance.Oven.OutputSlot.GetCapacityForItem(productInstance, false);
             __result = capacity >= quantityProduced;
-
         }
 
         // Call our own startcook coroutine with accelerated animations
@@ -795,32 +891,22 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartLabOvenBehaviour __instance)
         {
-            try
+            if (Utils.GetField<StartLabOvenBehaviour>("cookRoutine", __instance) != null || __instance.targetOven == null)
             {
-                if (Utils.GetField<StartLabOvenBehaviour>("cookRoutine", __instance) != null || __instance.targetOven == null)
-                {
-                    return false;
-                }
-                object workRoutine = Utils.StartCoroutine(StartCookCoroutine(__instance));
-                Utils.SetField<StartLabOvenBehaviour>("cookRoutine", __instance, (Coroutine)workRoutine);
+                return false;
             }
-            catch (Exception e)
-            {
-                Utils.Warn($"Failed to set cookroutine: {e.GetType().Name} - {e.Message}");
-                Utils.Warn($"Source: {e.Source}");
-                Utils.Warn($"{e.StackTrace}");
-            }
-
+            object workRoutine = Utils.StartCoroutine(StartCookCoroutine(__instance));
+            Utils.SetField<StartLabOvenBehaviour>("cookRoutine", __instance, (Coroutine)workRoutine);
             return false;
         }
 
         // Startcook coroutine with accelerated animations
         private static IEnumerator StartCookCoroutine(StartLabOvenBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.targetOven);
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.targetOven);
             behaviour.targetOven.SetNPCUser(behaviour.Npc.NetworkObject);
-            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
+            behaviour.Npc.Movement.FacePoint(behaviour.targetOven.transform.position, Mathf.Max(0.1f, 0.5f / workSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / workSpeed));
 
             if (!(bool)Utils.CallMethod<StartLabOvenBehaviour>("CanCookStart", behaviour))
             {
@@ -829,15 +915,14 @@ namespace ProduceMore
                 yield break;
             }
 
-            // halp
             behaviour.targetOven.Door.SetPosition(1f);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / workSpeed));
 
             behaviour.targetOven.WireTray.SetPosition(1f);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 5f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 5f / workSpeed));
 
             behaviour.targetOven.Door.SetPosition(0f);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / workSpeed));
 
             ItemInstance itemInstance = behaviour.targetOven.IngredientSlot.ItemInstance;
             if (itemInstance == null)
@@ -852,16 +937,16 @@ namespace ProduceMore
             CookableModule cookable = storableItemDef.StationItem.GetModule<CookableModule>();
             if (cookable.CookType == CookableModule.ECookableType.Solid)
             {
-                num = Mathf.Min(behaviour.targetOven.IngredientSlot.Quantity, 10);
+                num = Mathf.Min(behaviour.targetOven.IngredientSlot.Quantity, LabOven.SOLID_INGREDIENT_COOK_LIMIT);
             }
             itemInstance.ChangeQuantity(-num);
-            string id = cookable.Product.ID;
+            string productId = cookable.Product.ID;
             EQuality ingredientQuality = EQuality.Standard;
             if (Utils.Is<QualityItemInstance>(itemInstance))
             {
-                ingredientQuality = (Utils.CastTo<QualityItemInstance>(itemInstance)).Quality;
+                ingredientQuality = Utils.CastTo<QualityItemInstance>(itemInstance).Quality;
             }
-            behaviour.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, id));
+            behaviour.targetOven.SendCookOperation(new OvenCookOperation(itemInstance.ID, ingredientQuality, num, productId));
             Utils.CallMethod<StartLabOvenBehaviour>("StopCook", behaviour);
             behaviour.Deactivate_Networked(null);
             yield break;
@@ -869,20 +954,14 @@ namespace ProduceMore
 
         [HarmonyPatch(typeof(StartLabOvenBehaviour), "StopCook")]
         [HarmonyPrefix]
-        public static bool StopCookPrefix(StartLabOvenBehaviour __instance)
+        public static void StopCookPrefix(StartLabOvenBehaviour __instance)
         {
-            if (__instance.targetOven != null)
-            {
-                __instance.targetOven.SetNPCUser(null);
-            }
             object workRoutine = Utils.GetField<StartLabOvenBehaviour>("cookRoutine", __instance);
             if (workRoutine != null)
             {
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<StartLabOvenBehaviour>("cookRoutine", __instance, null);
             }
-
-            return false;
         }
 
         // Call our own finishcook coroutine with accelerated animations
@@ -947,25 +1026,19 @@ namespace ProduceMore
             yield break;
         }
 
+        // Kill our coroutine and remove it from the list
         [HarmonyPatch(typeof(FinishLabOvenBehaviour), "StopAction")]
         [HarmonyPrefix]
-        public static bool StopActionPrefix(FinishLabOvenBehaviour __instance)
+        public static void StopActionPrefix(FinishLabOvenBehaviour __instance)
         {
-            __instance.targetOven.SetNPCUser(null);
-            __instance.Npc.SetEquippable_Networked(null, string.Empty);
-            __instance.Npc.SetAnimationBool_Networked(null, "UseHammer", false);
-
             object workRoutine = Utils.GetField<FinishLabOvenBehaviour>("actionRoutine", __instance);
             if (workRoutine != null)
             {
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<FinishLabOvenBehaviour>("actionRoutine", __instance, null);
             }
-
-            return false;
         }
     }
-
 
     // Patch mixing station capacity and speed
     [HarmonyPatch]
@@ -973,8 +1046,8 @@ namespace ProduceMore
     {
         // capacity
         [HarmonyPatch(typeof(MixingStation), "GetMixQuantity")]
-        [HarmonyPrefix]
-        public static bool GetMixQuantityPrefix(MixingStation __instance, ref int __result)
+        [HarmonyPostfix]
+        public static void GetMixQuantityPostfix(MixingStation __instance, ref int __result)
         {
             Utils.AddStationCapacity(__instance, __instance.MaxMixQuantity);
             __instance.MaxMixQuantity = Utils.GetStationCapacity(__instance);
@@ -982,10 +1055,9 @@ namespace ProduceMore
             if (__instance.GetProduct() == null || __instance.GetMixer() == null)
             {
                 __result = 0;
-                return false;
+                return;
             }
-            __result = Mathf.Min(Mathf.Min(__instance.ProductSlot.Quantity, __instance.MixerSlot.Quantity), __instance.MaxMixQuantity);
-            return false;
+            __result = Mathf.Min([__instance.ProductSlot.Quantity, __instance.MixerSlot.Quantity, __instance.MaxMixQuantity]);
         }
 
         // actual call to GetMixQuantity seems to have been optimized out.
@@ -997,7 +1069,7 @@ namespace ProduceMore
             __result = __instance.GetMixQuantity() > 0 && __instance.OutputSlot.Quantity == 0;
         }
 
-        // actual call to GetMixQuantity seems to have been optimized out.
+        // actual call to GetMixTime seems to have been optimized out.
         [HarmonyPatch(typeof(MixingStation), "IsMixingDone", MethodType.Getter)]
         [HarmonyPostfix]
         public static void IsMixingDonePostfix(MixingStation __instance, ref bool __result)
@@ -1008,30 +1080,28 @@ namespace ProduceMore
 
         // speed
         [HarmonyPatch(typeof(MixingStation), "GetMixTimeForCurrentOperation")]
-        [HarmonyPrefix]
-        public static bool GetMixTimePrefix(MixingStation __instance, ref int __result)
+        [HarmonyPostfix]
+        public static void GetMixTimePostfix(MixingStation __instance, ref int __result)
         {
-            Utils.AddStationCapacity(__instance, __instance.MixTimePerItem);
-            __instance.MixTimePerItem = Utils.GetStationCapacity(__instance);
-
-            float stationSpeed = Utils.GetStationSpeed(__instance);
-            int originalStationTime = Utils.GetOriginalStationTime(__instance);
-            float mixTimePerItem = (float)originalStationTime / stationSpeed;
-
             if (__instance.CurrentMixOperation == null)
             {
-                __result = 0;
-                return false;
+                return;
             }
-            // Returning < 1 breaks coroutine.
-            __result = (int)Mathf.Max((mixTimePerItem * (float)__instance.CurrentMixOperation.Quantity), 1f);
 
-            return false;
+            float stationSpeed = Utils.GetStationSpeed(__instance);
+            int originalTimePerItem = __instance.MixTimePerItem;
+            int quantity = __instance.CurrentMixOperation.Quantity;
+            float mixTimePerItem = (float)originalTimePerItem / stationSpeed;
+            float totalMixTime = mixTimePerItem * (float)quantity;
+
+            // Returning < 1 breaks mix completion logic.
+            __result = (int)Mathf.Max(1f, totalMixTime);
+            return;
         }
 
         [HarmonyPatch(typeof(Chemist), "GetMixStationsReadyToMove")]
-        [HarmonyPrefix]
-        public static bool GetMixStationsReadyToMovePrefix(Chemist __instance, ref MixingStationList __result)
+        [HarmonyPostfix]
+        public static void GetMixStationsReadyToMovePrefix(Chemist __instance, ref MixingStationList __result)
         {
             var list = new MixingStationList();
 
@@ -1043,6 +1113,7 @@ namespace ProduceMore
                 if (outputSlot.Quantity != 0 && __instance.MoveItemBehaviour.IsTransitRouteValid(configuration.DestinationRoute, outputSlot.ItemInstance.ID))
                 {
                     // Only deliver to packaging stations with at least half a stack of space in input slot.
+                    // Prevents chemists from running back and forth constantly to only carry a few items.
                     if (Utils.Is<PackagingStation>(destination) || Utils.Is<PackagingStationMk2>(destination))
                     {
                         PackagingStation station = Utils.CastTo<PackagingStation>(destination);
@@ -1052,7 +1123,7 @@ namespace ProduceMore
                         }
                         else if (station.ProductSlot.ItemInstance.CanStackWith(outputSlot.ItemInstance))
                         {
-                            int inputStackLimit = Utils.Mod.GetStackLimit(station.ProductSlot.ItemInstance);
+                            int inputStackLimit = station.ProductSlot.ItemInstance.StackLimit;
                             if (inputStackLimit - station.ProductSlot.Quantity > inputStackLimit / 2)
                             {
                                 list.Add(mixingStation);
@@ -1065,72 +1136,45 @@ namespace ProduceMore
                     }
                 }
             }
-
             __result = list;
-            return false;
         }
-
 
         [HarmonyPatch(typeof(StartMixingStationBehaviour), "StartCook")]
         [HarmonyPrefix]
         public static void StartCookPrefix(StartMixingStationBehaviour __instance)
         {
-            Utils.AddStationCapacity(__instance.targetStation, __instance.targetStation.MaxMixQuantity);
+            // Default station batch size is not available as a constant.
+            if (Utils.Is<MixingStationMk2>(__instance.targetStation))
+            {
+                Utils.AddStationCapacity(__instance.targetStation, 20);
+            }
+            else if (Utils.Is<MixingStation>(__instance.targetStation))
+            {
+                Utils.AddStationCapacity(__instance.targetStation, 10);
+            }
             __instance.targetStation.MaxMixQuantity = Utils.GetStationCapacity(__instance.targetStation);
         }
 
         // GetMixTimeForCurrentOperation seems to have been optimized out.
         [HarmonyPatch(typeof(MixingStation), "MinPass")]
         [HarmonyPrefix]
-        public static bool MinPassPrefix(MixingStation __instance)
+        public static void MinPassPrefix(MixingStation __instance)
         {
             if (__instance.CurrentMixOperation != null || __instance.OutputSlot.Quantity > 0)
             {
-                int num = 0;
                 if (__instance.CurrentMixOperation != null)
                 {
-                    int currentMixTime = __instance.CurrentMixTime;
-                    int currentMixTime2 = __instance.CurrentMixTime;
-                    Utils.SetProperty<MixingStation>("CurrentMixTime", __instance, currentMixTime2 + 1);
-                    num = __instance.GetMixTimeForCurrentOperation();
-                    if (__instance.CurrentMixTime >= num && currentMixTime < num && InstanceFinder.IsServer)
+                    int totalMixTime = __instance.GetMixTimeForCurrentOperation();
+                    if (__instance.CurrentMixTime + 1 >= totalMixTime && InstanceFinder.IsServer)
                     {
                         NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("Mixing_Operations_Completed", (NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("Mixing_Operations_Completed") + 1f).ToString(), true);
                         __instance.MixingDone_Networked();
                     }
                 }
-                if (__instance.Clock != null)
-                {
-                    __instance.Clock.SetScreenLit(true);
-                    __instance.Clock.DisplayMinutes(Mathf.Max(num - __instance.CurrentMixTime, 0));
-                }
-                if (__instance.Light != null)
-                {
-                    if (__instance.IsMixingDone)
-                    {
-                        __instance.Light.isOn = (NetworkSingleton<TimeManager>.Instance.DailyMinTotal % 2 == 0);
-                        return false;
-                    }
-                    __instance.Light.isOn = true;
-                    return false;
-                }
             }
-            else
-            {
-                if (__instance.Clock != null)
-                {
-                    __instance.Clock.SetScreenLit(false);
-                    __instance.Clock.DisplayText(string.Empty);
-                }
-                if (__instance.Light != null && __instance.IsMixingDone)
-                {
-                    __instance.Light.isOn = false;
-                }
-            }
-            return false;
         }
 
-
+        // start our accelerated mix coroutine
         [HarmonyPatch(typeof(StartMixingStationBehaviour), "RpcLogic___StartCook_2166136261")]
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartMixingStationBehaviour __instance)
@@ -1151,10 +1195,10 @@ namespace ProduceMore
 
         private static IEnumerator StartMixCoroutine(StartMixingStationBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.targetStation);
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.targetStation);
 
-            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / workSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / workSpeed));
 
             if (!(bool)Utils.CallMethod<StartMixingStationBehaviour>("CanCookStart", behaviour))
             {
@@ -1165,16 +1209,18 @@ namespace ProduceMore
 
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
-            QualityItemInstance product = Utils.CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
-            ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
+            int originalMixTimePerItem = behaviour.targetStation.MixTimePerItem;
+            float mixTimePerItem = (float)originalMixTimePerItem / workSpeed;
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
-            float mixTime = Mathf.Max(0.1f, (float)mixQuantity / stationSpeed);
-            for (float i = 0f; i < mixTime; i += Time.deltaTime)
+            float totalMixTime = mixTimePerItem * (float)mixQuantity;
+            for (float i = 0f; i < totalMixTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.targetStation.uiPoint.position, 0, false);
                 yield return new WaitForEndOfFrame();
             }
 
+            QualityItemInstance product = Utils.CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
+            ItemInstance mixer = behaviour.targetStation.MixerSlot.ItemInstance;
             if (InstanceFinder.IsServer)
             {
                 behaviour.targetStation.ProductSlot.ChangeQuantity(-mixQuantity, false);
@@ -1187,35 +1233,28 @@ namespace ProduceMore
             behaviour.Deactivate_Networked(null);
             yield break;
         }
-
-
+        
+        // Kill our coroutine and remove it from the list
         [HarmonyPatch(typeof(StartMixingStationBehaviour), "StopCook")]
         [HarmonyPrefix]
-        public static bool StopCookPrefix(StartMixingStationBehaviour __instance)
+        public static void StopCookPrefix(StartMixingStationBehaviour __instance)
         {
-            if (__instance.targetStation != null)
-            {
-                __instance.targetStation.SetNPCUser(null);
-            }
-            __instance.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", false);
-
             object workRoutine = Utils.GetField<StartMixingStationBehaviour>("startRoutine", __instance);
             if (workRoutine != null)
             {
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<StartMixingStationBehaviour>("startRoutine", __instance, null);
             }
-
-            return false;
         }
 
-        // increase threshold
+        // increase max mixing start threshold and set station's max mix quantity
         [HarmonyPatch(typeof(MixingStationUIElement), "Initialize")]
         [HarmonyPrefix]
         public static void InitializeUIPrefix(MixingStation station)
         {
             int stationCapacity = Utils.GetStationCapacity(station);
-            Utils.CastTo<MixingStationConfiguration>(station.Configuration).StartThrehold.Configure(1f, stationCapacity, true);
+            Utils.GetProperty<MixingStation, MixingStationConfiguration>("stationConfiguration", station).StartThrehold.Configure(1f, stationCapacity, true);
+            station.MaxMixQuantity = stationCapacity;
         }
     }
 
@@ -1247,23 +1286,26 @@ namespace ProduceMore
 
         private static IEnumerator PackagingCoroutine(BrickPressBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.Press);
+            Utils.AddOriginalStationTime(behaviour.Press, (int)BrickPressBehaviour.BASE_PACKAGING_TIME);
             yield return new WaitForEndOfFrame();
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
-            float packageTime = 15f / (Utils.CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * stationSpeed);
-            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.Press);
+            float originalDuration = Utils.GetOriginalStationTime(behaviour.Press);
+            float employeeMultiplier = Utils.CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier;
+            float duration = originalDuration / (employeeMultiplier * workSpeed);
+            for (float i = 0f; i < duration; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Press.uiPoint.position, 0, false);
                 yield return new WaitForEndOfFrame();
             }
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.2f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.2f / workSpeed));
 
             behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
             behaviour.Press.PlayPressAnim();
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / workSpeed));
 
             ProductItemInstance product;
             if (InstanceFinder.IsServer && behaviour.Press.HasSufficientProduct(out product))
@@ -1280,7 +1322,7 @@ namespace ProduceMore
         // gracefully stop meloncoroutine
         [HarmonyPatch(typeof(BrickPressBehaviour), "StopPackaging")]
         [HarmonyPrefix]
-        public static bool StopPackagingPrefix(BrickPressBehaviour __instance)
+        public static void StopPackagingPrefix(BrickPressBehaviour __instance)
         {
             object workRoutine = Utils.GetField<BrickPressBehaviour>("packagingRoutine", __instance);
             if (workRoutine != null)
@@ -1289,54 +1331,25 @@ namespace ProduceMore
                 Utils.SetField<BrickPressBehaviour>("packagingRoutine", __instance, null);
             }
             Utils.SetField<BrickPressBehaviour>("PackagingInProgress", __instance, false);
-            return false;
         }
     }
-
 
     // cauldron patches
     [HarmonyPatch]
     public class CauldronPatches
     {
-        // patch visuals for capacity
-        [HarmonyPatch(typeof(Cauldron), "UpdateIngredientVisuals")]
-        [HarmonyPrefix]
-        public static bool UpdateIngredientVisualsPatch(Cauldron __instance)
-        {
-            int cauldronCapacity = Utils.Mod.GetStackLimit("Coca Leaf", EItemCategory.Agriculture);
-            ItemInstance itemInstance;
-            int num;
-            ItemInstance itemInstance2;
-            int num2;
-            __instance.GetMainInputs(out itemInstance, out num, out itemInstance2, out num2);
-            if (itemInstance != null)
-            {
-                __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num / (float)cauldronCapacity);
-            }
-            else
-            {
-                __instance.PrimaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
-            }
-            if (itemInstance2 != null)
-            {
-                __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.CocaLeaf, (float)num2 / (float)cauldronCapacity);
-                return false;
-            }
-            __instance.SecondaryTub.Configure(CauldronDisplayTub.EContents.None, 0f);
-
-            return false;
-        }
-
-
         // speed
         [HarmonyPatch(typeof(Cauldron), "StartCookOperation")]
         [HarmonyPrefix]
         public static void StartCookOperationPrefix(Cauldron __instance, ref int remainingCookTime)
         {
-            Utils.AddStationTime(__instance, __instance.CookTime);
+            // Base cauldron time not available as a constant. Use a magic number.
+            Utils.AddOriginalStationTime(__instance, 360);
             int cookTime = Utils.GetOriginalStationTime(__instance);
             float stationSpeed = Utils.GetStationSpeed(__instance);
-            int newCookTime = (int)((float)cookTime / stationSpeed);
+
+            // Cook time must be at least 1 second, otherwise cauldrons break entirely.
+            int newCookTime = (int)Mathf.Max((float)cookTime / stationSpeed, 1f);
             __instance.CookTime = newCookTime;
             remainingCookTime = newCookTime;
         }
@@ -1346,10 +1359,11 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void HasOutputSpacePostfix(Cauldron __instance, ref bool __result)
         {
-            int stackLimit = Utils.Mod.GetStackLimit(__instance.CocaineBaseDefinition);
-            ItemInstance outputInstance = __instance.CocaineBaseDefinition.GetDefaultInstance();
-            __result = __instance.OutputSlot.GetCapacityForItem(outputInstance, false) >= stackLimit;
+            QualityItemInstance outputInstance = Utils.CastTo<QualityItemInstance>(__instance.CocaineBaseDefinition.GetDefaultInstance());
+            outputInstance.Quality = __instance.InputQuality;
 
+            // 10 is batch size, unfortunately not available as a constant.
+            __result = __instance.OutputSlot.GetCapacityForItem(outputInstance, false) >= 10;
         }
 
         // call to HasOutputSpace seems to have been optimized out.
@@ -1398,16 +1412,17 @@ namespace ProduceMore
             return false;
         }
 
-
         // coroutine with reduced animation times
         private static IEnumerator BeginCauldronCoroutine(StartCauldronBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
-
             yield return new WaitForEndOfFrame();
+
             behaviour.Npc.Avatar.Animation.SetBool("UseChemistryStation", true);
-            float packageTime = Mathf.Max(0.1f, StartCauldronBehaviour.START_CAULDRON_TIME / Utils.GetStationWorkSpeed(behaviour.Station));
-            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
+            float originalWorkTime = StartCauldronBehaviour.START_CAULDRON_TIME;
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
+            float workTime = Mathf.Max(0.1f, originalWorkTime / workSpeed);
+            for (float i = 0f; i < workTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.LinkOrigin.position, 0, false);
                 yield return new WaitForEndOfFrame();
@@ -1426,10 +1441,10 @@ namespace ProduceMore
             yield break;
         }
 
-
-        [HarmonyPatch(typeof(StartCauldronBehaviour), "StopCauldron")]
+        // Kill our coroutine and remove it from the list
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "StopCagguldron")]
         [HarmonyPrefix]
-        public static bool StopCauldronPrefix(StartCauldronBehaviour __instance)
+        public static void StopCauldronPrefix(StartCauldronBehaviour __instance)
         {
             object workRoutine = Utils.GetField<StartCauldronBehaviour>("workRoutine", __instance);
             if (workRoutine != null)
@@ -1437,12 +1452,6 @@ namespace ProduceMore
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<StartCauldronBehaviour>("workRoutine", __instance, null);
             }
-            if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
-            {
-                __instance.Station.SetNPCUser(null);
-            }
-            Utils.SetProperty<StartCauldronBehaviour>("WorkInProgress", __instance, false);
-            return false;
         }
     }
 
@@ -1474,41 +1483,56 @@ namespace ProduceMore
             yield return new WaitForEndOfFrame();
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
 
-            float stationWorkSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
-
             ProductItemInstance packagedInstance = Utils.CastTo<ProductItemInstance>(behaviour.Station.ProductSlot.ItemInstance.GetCopy());
             PackagingDefinition packagingDefinition = Utils.CastTo<PackagingDefinition>(behaviour.Station.PackagingSlot.ItemInstance.Definition);
             packagedInstance.SetPackaging(packagingDefinition);
+
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
             int outputSpace = behaviour.Station.OutputSlot.GetCapacityForItem(packagedInstance);
             int productPerPackage = packagingDefinition.Quantity;
-            int availableToPackage = Mathf.Min(behaviour.Station.ProductSlot.Quantity, behaviour.Station.PackagingSlot.Quantity);
+            int productQuantity = behaviour.Station.ProductSlot.Quantity;
+            int packagingQuantity = behaviour.Station.PackagingSlot.Quantity;
+            int numPackages = Mathf.Min([packagingQuantity, productQuantity / productPerPackage, outputSpace]);
+
             // leave the last package to PackSingleInstance
-            int numPackages = Mathf.Max(Mathf.Min(availableToPackage / productPerPackage, outputSpace) - 1, 0);
-            float packageTime = Mathf.Max(0.1f, (float)numPackages * PackagingStationBehaviour.BASE_PACKAGING_TIME / (Utils.CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier * behaviour.Station.PackagerEmployeeSpeedMultiplier * stationWorkSpeed));
+            int numBatchPackages = numPackages - 1;
 
-            for (float i = 0f; i < packageTime; i += Time.deltaTime)
+            if (numPackages > 0)
             {
-                behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
-                yield return new WaitForEndOfFrame();
-            }
+                float basePackagingTime = PackagingStationBehaviour.BASE_PACKAGING_TIME;
+                float employeeMultiplier = Utils.CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier;
+                float stationMultiplier = behaviour.Station.PackagerEmployeeSpeedMultiplier;
+                float packageTime = Mathf.Max(0.1f, (float)numPackages * basePackagingTime / (stationMultiplier * employeeMultiplier * workSpeed));
+                for (float i = 0f; i < packageTime; i += Time.deltaTime)
+                {
+                    behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
+                    yield return new WaitForEndOfFrame();
+                }
 
-            if (InstanceFinder.IsServer && numPackages >= 0)
-            {
-                float value = NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("PackagedProductCount");
-                NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("PackagedProductCount", (value + (numPackages + 1) * productPerPackage).ToString(), true);
-                if (behaviour.Station.OutputSlot.ItemInstance == null)
+                if (InstanceFinder.IsServer)
                 {
-                    behaviour.Station.OutputSlot.SetStoredItem(packagedInstance, false);
-                    behaviour.Station.OutputSlot.SetQuantity(numPackages);
+                    if (numBatchPackages > 0)
+                    {
+                        // Add to packagedproductcount. Minus one package, because packsingleinstance also increments this variable.
+                        float value = NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("PackagedProductCount");
+                        NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("PackagedProductCount", (value + numBatchPackages * productPerPackage).ToString(), true);
+
+                        if (behaviour.Station.OutputSlot.ItemInstance == null)
+                        {
+                            behaviour.Station.OutputSlot.SetStoredItem(packagedInstance, false);
+                            behaviour.Station.OutputSlot.SetQuantity(numBatchPackages);
+                        }
+                        else
+                        {
+                            behaviour.Station.OutputSlot.ChangeQuantity(numBatchPackages, false);
+                        }
+                        behaviour.Station.PackagingSlot.ChangeQuantity(-numBatchPackages, false);
+                        behaviour.Station.ProductSlot.ChangeQuantity(-numBatchPackages * productPerPackage, false);
+                    }
+
+                    // Make sure PackSingleInstance is called at least once--AutoRestock hooks it
+                    behaviour.Station.PackSingleInstance();
                 }
-                else
-                {
-                    behaviour.Station.OutputSlot.ChangeQuantity(numPackages, false);
-                }
-                behaviour.Station.PackagingSlot.ChangeQuantity(-numPackages, false);
-                behaviour.Station.ProductSlot.ChangeQuantity(-numPackages * productPerPackage, false);
-                // Make sure PackSingleInstance is called--AutoRestock hooks it
-                behaviour.Station.PackSingleInstance();
             }
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
@@ -1519,10 +1543,10 @@ namespace ProduceMore
             yield break;
         }
 
-        // stop our coroutine cleanly
+        // stop our coroutine cleanly and remove it from the list
         [HarmonyPatch(typeof(PackagingStationBehaviour), "StopPackaging")]
         [HarmonyPrefix]
-        public static bool StopPackagingPrefix(PackagingStationBehaviour __instance)
+        public static void StopPackagingPrefix(PackagingStationBehaviour __instance)
         {
             object workRoutine = Utils.GetField<PackagingStationBehaviour>("packagingRoutine", __instance);
             if (workRoutine != null)
@@ -1530,13 +1554,6 @@ namespace ProduceMore
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<PackagingStationBehaviour>("packagingRoutine", __instance, null);
             }
-            __instance.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
-            if (InstanceFinder.IsServer && __instance.Station != null && __instance.Station.NPCUserObject == __instance.Npc.NetworkObject)
-            {
-                __instance.Station.SetNPCUser(null);
-            }
-            Utils.SetProperty<PackagingStationBehaviour>("PackagingInProgress", __instance, false);
-            return false;
         }
     }
 
@@ -1609,7 +1626,7 @@ namespace ProduceMore
             {
                 return;
             }
-            float growthRate = ((float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance)) * (Utils.Mod.GetStationSpeed("MushroomBed") - 1f);
+            float growthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance) * Utils.Mod.GetStationSpeed("MushroomBed");
             int growTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
             float percentage = growthRate / ((float)growTime * 60f);
             Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [percentage]);
@@ -1645,11 +1662,12 @@ namespace ProduceMore
         // Coroutine with accelerated animation
         public static IEnumerator SpawnStationCoroutine(UseSpawnStationBehaviour behaviour)
         {
-            // TODO: has private const int been optimized away? let's find out
             float originalDuration = (float)Utils.GetField<UseSpawnStationBehaviour>("TaskDuration", behaviour);
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.Station);
             float progress = 0f;
-            float duration = Mathf.Max(0.1f, originalDuration / stationSpeed);
+            float duration = Mathf.Max(0.1f, originalDuration / workSpeed);
+
+            // shouldn't this be SetAnimationBool_Networked?
             behaviour.Npc.SetAnimationBool("UsePackagingStation", true);
             while (progress < duration)
             {
@@ -1665,17 +1683,7 @@ namespace ProduceMore
                 behaviour.Station.OutputSlot.AddItem(sporeSyringeDefinition.SpawnDefinition.GetDefaultInstance(1), false);
             }
 
-            try
-            {
-                Utils.CallMethod<UseSpawnStationBehaviour>("StopWork", behaviour);
-            }
-            catch (Exception e)
-            {
-                // This is expected.
-                // For compatibility with AutoRestock, we need a non-destructive prefix for StopWork.
-                // However, StopWork's original method body will throw an exception when it tries to stop a null coroutine.
-                // We don't really care; we already stopped that coroutine. Catch the exception and continue.
-            }
+            Utils.CallMethod<UseSpawnStationBehaviour>("StopWork", behaviour);
             behaviour.Disable_Networked(null);
             yield break;
         }
@@ -1754,13 +1762,14 @@ namespace ProduceMore
             }
             else
             {
-                Utils.Warn($"Couldn't find action duration for behaviour \"{behaviour.gameObject.GetComponentAtIndex(1).name}\" ({behaviourType.Name})");
+                Utils.Warn($"Couldn't find action duration for behaviour \"{behaviour.name}\" ({behaviourType.Name})");
                 duration = 10f;
             }
-
             return duration;
         }
 
+        // GetQuantityToHarvest is defined for some descendants of GrowContainerBehaviour, but not others, so
+        // getting it via reflection is wordy. Abstract to its own function.
         private static int GetQuantityToHarvest(GrowContainerBehaviour behaviour)
         {
             int productCount = 0;
@@ -1773,6 +1782,7 @@ namespace ProduceMore
             if (Utils.Is<HarvestPotBehaviour>(behaviour))
             {
                 HarvestPotBehaviour potBehaviour = Utils.CastTo<HarvestPotBehaviour>(behaviour);
+                return (int)Utils.CallMethod<HarvestPotBehaviour>("GetQuantityToHarvest", potBehaviour);
                 Pot pot = Utils.GetField<HarvestPotBehaviour, Pot>("_pot", potBehaviour);
                 ItemInstance harvestedProduct = pot.Plant.GetHarvestedProduct(1);
                 productCount = pot.Plant.ActiveHarvestables.Count;
@@ -1783,6 +1793,7 @@ namespace ProduceMore
             else if (Utils.Is<HarvestMushroomBedBehaviour>(behaviour))
             {
                 HarvestMushroomBedBehaviour shroomBehaviour = Utils.CastTo<HarvestMushroomBedBehaviour>(behaviour);
+                return (int)Utils.CallMethod<HarvestMushroomBedBehaviour>("GetQuantityToHarvest", shroomBehaviour);
                 MushroomBed bed = Utils.GetField<HarvestMushroomBedBehaviour, MushroomBed>("_bed", shroomBehaviour);
                 ItemInstance harvestedProduct = bed.CurrentColony.GetHarvestedShroom(1);
                 productCount = bed.CurrentColony.GrownMushroomCount;
@@ -1793,6 +1804,7 @@ namespace ProduceMore
             else
             {
                 Utils.Warn($"Couldn't get quantity to harvest from behaviour {Utils.GetType(behaviour).Name}");
+                return 0;
             }
 
             return Mathf.Min(new int[] { productCount, botanistCapacity, destinationCapacity, outputCapacity });
@@ -1805,11 +1817,11 @@ namespace ProduceMore
         {
             Utils.CallMethod<GrowContainerBehaviour>("OnStartPerformAction", behaviour);
             GrowContainer growContainer = Utils.GetProperty<GrowContainerBehaviour, GrowContainer>("_growContainer", behaviour);
-            float stationSpeed = Utils.GetStationWorkSpeed(growContainer);
-            float waitTime = GetActionDuration(behaviour) / stationSpeed;
+            float workSpeed = Utils.GetStationWorkSpeed(growContainer);
+            float waitTime = GetActionDuration(behaviour) / workSpeed;
+            Vector3 targetPosition = (Vector3)Utils.CallMethod<GrowContainerBehaviour>("GetGrowContainerLookPoint", behaviour);
             for (float i = 0f; i < waitTime; i += Time.deltaTime)
             {
-                Vector3 targetPosition = (Vector3)Utils.CallMethod<GrowContainerBehaviour>("GetGrowContainerLookPoint", behaviour);
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(targetPosition, 0, false);
                 yield return new WaitForEndOfFrame();
             }
@@ -1858,29 +1870,15 @@ namespace ProduceMore
         // properly stop our coroutines
         [HarmonyPatch(typeof(GrowContainerBehaviour), "StopAllRoutines")]
         [HarmonyPrefix]
-        public static bool StopAllRoutinesPrefix(GrowContainerBehaviour __instance)
+        public static void StopAllRoutinesPrefix(GrowContainerBehaviour __instance)
         {
-            Coroutine walkRoutine = Utils.GetField<GrowContainerBehaviour, Coroutine>("_walkRoutine", __instance);
-            Coroutine grabRoutine = Utils.GetField<GrowContainerBehaviour, Coroutine>("_grabRoutine", __instance);
             object performActionRoutine = Utils.GetField<GrowContainerBehaviour>("_performActionRoutine", __instance);
-
-            if (walkRoutine != null)
-            {
-                __instance.StopCoroutine(walkRoutine);
-                Utils.SetField<GrowContainerBehaviour>("_walkRoutine", __instance, null);
-            }
-            if (grabRoutine != null)
-            {
-                __instance.StopCoroutine(grabRoutine);
-                Utils.SetField<GrowContainerBehaviour>("_grabRoutine", __instance, null);
-            }
             if (performActionRoutine != null)
             {
                 Utils.CallMethod<GrowContainerBehaviour>("OnStopPerformAction", __instance);
                 Utils.StopCoroutine(performActionRoutine);
                 Utils.SetField<GrowContainerBehaviour>("_performActionRoutine", __instance, null);
             }
-            return false;
         }
 
         // PerformAction is inlined. Replace OnActiveTick with original method body.
@@ -1888,59 +1886,52 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool OnActiveTickPrefix(GrowContainerBehaviour __instance)
         {
-            // base.OnActiveTick is called here.
+            // base.OnActiveTick is originally called here.
             // However, Behaviour.OnActiveTick is empty.
             // Just skip the whole call.
+
             if (!InstanceFinder.IsServer)
             {
                 return false;
             }
 
-            try
-            {
-                int currentState = (int)Utils.GetProperty<GrowContainerBehaviour>("_currentState", __instance);
-                GrowContainer growContainer = Utils.GetProperty<GrowContainerBehaviour, GrowContainer>("_growContainer", __instance);
+            int currentState = (int)Utils.GetProperty<GrowContainerBehaviour>("_currentState", __instance);
+            GrowContainer growContainer = Utils.GetProperty<GrowContainerBehaviour, GrowContainer>("_growContainer", __instance);
 
-                if (currentState == (int)EState.Idle)
-                {
-                    if (growContainer == null)
-                    {
-                        __instance.Disable_Networked(null);
-                        return false;
-                    }
-                    if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsRequiredItemInInventory", __instance, [growContainer]))
-                    {
-                        if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsAtGrowContainer", __instance))
-                        {
-                            // PerformAction seems to be inlined. just call our replacement version.
-                            PerformAction(__instance);
-                            return false;
-                        }
-                        ITransitEntity transitEntity = Utils.ToInterface<ITransitEntity>(growContainer);
-                        Utils.CallMethod<GrowContainerBehaviour>("WalkTo", __instance, [transitEntity]);
-                        return false;
-                    }
-                    else if ((bool)Utils.CallMethod<GrowContainerBehaviour>("DoSuppliesContainRequiredItem", __instance, [growContainer]))
-                    {
-                        if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsAtSupplies", __instance))
-                        {
-                            Utils.CallMethod<GrowContainerBehaviour>("GrabRequiredItemFromSupplies", __instance);
-                            return false;
-                        }
-                        Botanist botanist = Utils.GetProperty<GrowContainerBehaviour, Botanist>("_botanist", __instance);
-                        Utils.CallMethod<GrowContainerBehaviour>("WalkTo", __instance, [botanist.GetSuppliesAsTransitEntity()]);
-                        return false;
-                    }
-                    else
-                    {
-                        __instance.Disable_Networked(null);
-                    }
-                }
-            }
-            catch (Exception e)
+            if (currentState == (int)EState.Idle)
             {
-                Utils.PrintException(e);
-                return true;
+                if (growContainer == null)
+                {
+                    __instance.Disable_Networked(null);
+                    return false;
+                }
+                if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsRequiredItemInInventory", __instance, [growContainer]))
+                {
+                    if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsAtGrowContainer", __instance))
+                    {
+                        // PerformAction seems to be inlined. just call our replacement version.
+                        PerformAction(__instance);
+                        return false;
+                    }
+                    ITransitEntity transitEntity = Utils.ToInterface<ITransitEntity>(growContainer);
+                    Utils.CallMethod<GrowContainerBehaviour>("WalkTo", __instance, [transitEntity]);
+                    return false;
+                }
+                else if ((bool)Utils.CallMethod<GrowContainerBehaviour>("DoSuppliesContainRequiredItem", __instance, [growContainer]))
+                {
+                    if ((bool)Utils.CallMethod<GrowContainerBehaviour>("IsAtSupplies", __instance))
+                    {
+                        Utils.CallMethod<GrowContainerBehaviour>("GrabRequiredItemFromSupplies", __instance);
+                        return false;
+                    }
+                    Botanist botanist = Utils.GetProperty<GrowContainerBehaviour, Botanist>("_botanist", __instance);
+                    Utils.CallMethod<GrowContainerBehaviour>("WalkTo", __instance, [botanist.GetSuppliesAsTransitEntity()]);
+                    return false;
+                }
+                else
+                {
+                    __instance.Disable_Networked(null);
+                }
             }
             return false;
         }
@@ -1950,11 +1941,13 @@ namespace ProduceMore
     [HarmonyPatch]
     public class ChemistryStationPatches
     {
+        // Fix cook time label
         [HarmonyPatch(typeof(StationRecipeEntry), "AssignRecipe")]
         [HarmonyPostfix]
         public static void AssignRecipePostfix(StationRecipeEntry __instance, ref StationRecipe recipe)
         {
-            Utils.AddRecipeTime(__instance.Recipe, __instance.Recipe.CookTime_Mins);
+            float stationSpeed = Utils.Mod.GetStationSpeed("ChemistryStation");
+            Utils.ModRecipeTime(__instance.Recipe, stationSpeed);
 
             int hours = __instance.Recipe.CookTime_Mins / 60;
             int minutes = __instance.Recipe.CookTime_Mins % 60;
@@ -1970,6 +1963,10 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool Rpc_StartCookPrefix(StartChemistryStationBehaviour __instance)
         {
+            float stationSpeed = Utils.GetStationSpeed(__instance.targetStation);
+            StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", __instance.targetStation).Recipe.SelectedRecipe;
+            Utils.ModRecipeTime(recipe, stationSpeed);
+
             if (Utils.GetField<StartChemistryStationBehaviour>("cookRoutine", __instance) != null)
             {
                 return false;
@@ -1980,16 +1977,16 @@ namespace ProduceMore
             }
             object workRoutine = Utils.StartCoroutine(StartCookRoutine(__instance));
             Utils.SetField<StartChemistryStationBehaviour>("cookRoutine", __instance, (Coroutine)workRoutine);
-
             return false;
         }
 
         // Coroutine with accelerated animations
         private static IEnumerator StartCookRoutine(StartChemistryStationBehaviour behaviour)
         {
-            float stationSpeed = Utils.GetStationWorkSpeed(behaviour.targetStation);
-            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / stationSpeed));
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
+            float workSpeed = Utils.GetStationWorkSpeed(behaviour.targetStation);
+
+            behaviour.Npc.Movement.FacePoint(behaviour.targetStation.transform.position, Mathf.Max(0.1f, 0.5f / workSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / workSpeed));
 
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
             if (!(bool)Utils.CallMethod<StartChemistryStationBehaviour>("CanCookStart", behaviour))
@@ -2000,13 +1997,16 @@ namespace ProduceMore
             }
 
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
-            StationRecipe recipe = (Utils.CastTo<ChemistryStationConfiguration>(behaviour.targetStation.Configuration)).Recipe.SelectedRecipe;
             Utils.CallMethod<StartChemistryStationBehaviour>("SetupBeaker", behaviour);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 1f / workSpeed));
+
+            StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", behaviour.targetStation).Recipe.SelectedRecipe;
+            float stationSpeed = Utils.GetStationSpeed(behaviour.targetStation);
+            Utils.ModRecipeTime(recipe, stationSpeed);
 
             Beaker beaker = Utils.GetField<StartChemistryStationBehaviour, Beaker>("beaker", behaviour);
             Utils.CallMethod<StartChemistryStationBehaviour>("FillBeaker", behaviour, [recipe, beaker]);
-            yield return new WaitForSeconds(Mathf.Max(0.1f, 20f / stationSpeed));
+            yield return new WaitForSeconds(Mathf.Max(0.1f, 20f / workSpeed));
 
             ItemInstanceList list = new ItemInstanceList();
             for (int i = 0; i < recipe.Ingredients.Count; i++)
@@ -2033,27 +2033,42 @@ namespace ProduceMore
             Utils.CallMethod<StartChemistryStationBehaviour>("StopCook", behaviour);
             behaviour.Deactivate_Networked(null);
             yield break;
-
         }
 
-        // maybe convert to passthrough prefix?
         [HarmonyPatch(typeof(StartChemistryStationBehaviour), "StopCook")]
         [HarmonyPrefix]
-        public static bool StopCookPrefix(StartChemistryStationBehaviour __instance)
+        public static void StopCookPrefix(StartChemistryStationBehaviour __instance)
         {
-            __instance.targetStation.SetNPCUser(null);
-            __instance.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", false);
             object workRoutine = Utils.GetField<StartChemistryStationBehaviour>("cookRoutine", __instance);
             if (workRoutine != null)
             {
                 Utils.StopCoroutine(workRoutine);
                 Utils.SetField<StartChemistryStationBehaviour>("cookRoutine", __instance, null);
             }
+        }
 
-            return false;
+        // Base game bug: only go to stations that have enough space at the output.
+        [HarmonyPatch(typeof(Chemist), "GetChemistryStationsReadyToStart")]
+        [HarmonyPostfix]
+        public static void GetChemistryStationsReadyToStartPostfix(Chemist __instance, ref ChemStationList __result)
+        {
+            ChemStationList readyStations = __result.FindAll(Utils.ConvertToPredicate<ChemistryStation>((station) => 
+            {
+                StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", station).Recipe.SelectedRecipe;
+                return (bool)Utils.CallMethod<ChemistryStation>("DoesOutputHaveSpace", station, [recipe]);
+            }));
+            __result = readyStations;
+        }
+
+        // Base game bug: check that there's space in the output before performing cook operation.
+        [HarmonyPatch(typeof(StartChemistryStationBehaviour), "CanCookStart")]
+        [HarmonyPostfix]
+        public static void CanCookStartPostfix(StartChemistryStationBehaviour __instance, ref bool __result)
+        {
+            StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", __instance.targetStation).Recipe.SelectedRecipe;
+            __result = __result && (bool)Utils.CallMethod<ChemistryStation>("DoesOutputHaveSpace", __instance.targetStation, [recipe]);
         }
     }
-
 
     // cash patches
     [HarmonyPatch]
@@ -2340,6 +2355,9 @@ namespace ProduceMore
     {
         // Shorten stopping distance for NPCs.
         // This should decrease the amount of overshoot at high walk acceleration settings.
+        // This field is serialized, so this change will persist in the save.
+        // If someone disables this mod, this field will be permanently altered.
+        // Fortunately, decreasing stopping distance barely has a noticeable effect at default walk speed.
         [HarmonyPatch(typeof(NPCMovement), "Awake")]
         [HarmonyPostfix]
         public static void AwakePostfix(NPCMovement __instance)
@@ -2347,8 +2365,8 @@ namespace ProduceMore
             __instance.Agent.stoppingDistance = 0.1f;
         }
 
-        // Sometimes, when entity is spawn station, employees will fail to path
-        // even when station is perfectly accessible.
+        // Sometimes, when entity is spawn station, employees will fail to path even when station is
+        // perfectly accessible.
         // Relax proximity requirement for spawn station.
         [HarmonyPatch(typeof(NPCMovement), "CanGetTo", [typeof(ITransitEntity), typeof(float)])]
         [HarmonyPrefix]
@@ -2358,8 +2376,7 @@ namespace ProduceMore
             {
                 return;
             }
-            NPC npc = Utils.GetField<NPCMovement, NPC>("npc", __instance);
-            if (Utils.Is<MushroomSpawnStation>(entity) && Utils.Is<Botanist>(npc))
+            if (Utils.Is<MushroomSpawnStation>(entity) && proximityReq < 0.8f)
             {
                 proximityReq = 0.8f;
             }
@@ -2382,7 +2399,7 @@ namespace ProduceMore
 
         [HarmonyPatch]
         [HarmonyPrefix]
-        public static bool SetDestinationPrefix(NPCMovement __instance, ref float successThreshold)
+        public static void SetDestinationPrefix(NPCMovement __instance, ref float successThreshold)
         {
             // Adjust walk speed/acceleration/angularspeed
             float walkAcceleration = 1f;
@@ -2394,12 +2411,15 @@ namespace ProduceMore
             // Setting acceleration and angularspeed is necessary for employees to navigate
             // paths at high speed, but setting them too high makes motions unnecessarily jerky.
             __instance.MoveSpeedMultiplier = walkAcceleration;
-            __instance.Agent.acceleration = 20f * Mathf.Pow(walkAcceleration, 2f);
-            __instance.Agent.angularSpeed = 720f * Mathf.Pow(walkAcceleration, 5f);
+            if (walkAcceleration > 1f)
+            {
+                __instance.Agent.acceleration = 20f * Mathf.Pow(walkAcceleration, 5f);
+                __instance.Agent.angularSpeed = 720f * Mathf.Pow(walkAcceleration, 5f);
+            }
 
             // Sometimes, employees get stuck at a station and won't move.
             // At least some of the time, this is due to most walk routines having a proximity threshold of 1f,
-            // but various IsAtStation functions check within a smaller radius (0.4-0.6).
+            // but various proximity checking functions (IsAtStation, CanGetTo, etc) check within a smaller radius (0.4-0.6).
             // Meaning an employee can get stuck between 0.6f and 1f from the station access point,
             // where IsAtStation returns false, but SetDestination does not bring the NPC any closer.
             // In other words, get closer to the destination before ending walk routine.
@@ -2407,8 +2427,6 @@ namespace ProduceMore
             {
                 successThreshold = 0.4f;
             }
-
-            return true;
         }
     }
 }

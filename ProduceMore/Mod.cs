@@ -417,8 +417,16 @@ namespace ProduceMore
 // fix (or at least improve) employees getting stuck - improved
 // fix cauldron output capacity check - done
 // find earlier hook to stop coroutines than OnSceneChanged - done (v1.1.2)
+// fix cauldrons completing instantly - done
+// fix mixing stations completing instantly - done
+// fix drying rack dry time acceleration not working - done
+// fix npc inventory getcapacity - done
+// fix chemist starting new chemistry station operation without checking space in output - not my bug, but done
+// fix NPC item capacity checks - done
+// convert as many destructive patches as possible to non-destructive ones - done
+// 
 
 
 // Bugs:
-// melonpreferences changes not picked up until reload - fixed
+// oof
 
