@@ -15,7 +15,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.2", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -45,7 +45,6 @@ namespace ProduceMore
 		public MelonPreferences_Category employeeAnimation;
 		public MelonPreferences_Category stackSizes;
 		public MelonPreferences_Category stackOverrides;
-		bool preferencesInitialized = false;
 
 		public IEqualityComparer<UnityEngine.Object> unityComparer;
 		public HashSet<GridItem> processedStationCapacities;
@@ -420,11 +419,9 @@ namespace ProduceMore
 // fix cauldrons completing instantly - done
 // fix mixing stations completing instantly - done
 // fix drying rack dry time acceleration not working - done
-// fix npc inventory getcapacity - done
 // fix chemist starting new chemistry station operation without checking space in output - not my bug, but done
 // fix NPC item capacity checks - done
-// convert as many destructive patches as possible to non-destructive ones - done
-// 
+// convert as many destructive patches as possible to non-destructive ones - done (v1.1.3)
 
 
 // Bugs:

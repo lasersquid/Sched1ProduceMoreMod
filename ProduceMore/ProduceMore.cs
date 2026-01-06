@@ -1442,7 +1442,7 @@ namespace ProduceMore
         }
 
         // Kill our coroutine and remove it from the list
-        [HarmonyPatch(typeof(StartCauldronBehaviour), "StopCagguldron")]
+        [HarmonyPatch(typeof(StartCauldronBehaviour), "StopCauldron")]
         [HarmonyPrefix]
         public static void StopCauldronPrefix(StartCauldronBehaviour __instance)
         {
@@ -1772,42 +1772,21 @@ namespace ProduceMore
         // getting it via reflection is wordy. Abstract to its own function.
         private static int GetQuantityToHarvest(GrowContainerBehaviour behaviour)
         {
-            int productCount = 0;
-            int botanistCapacity = 0;
-            int destinationCapacity = 0;
-            int outputCapacity = 0;
-
-            Botanist botanist = Utils.GetProperty<GrowContainerBehaviour, Botanist>("_botanist", behaviour);
-
             if (Utils.Is<HarvestPotBehaviour>(behaviour))
             {
                 HarvestPotBehaviour potBehaviour = Utils.CastTo<HarvestPotBehaviour>(behaviour);
                 return (int)Utils.CallMethod<HarvestPotBehaviour>("GetQuantityToHarvest", potBehaviour);
-                Pot pot = Utils.GetField<HarvestPotBehaviour, Pot>("_pot", potBehaviour);
-                ItemInstance harvestedProduct = pot.Plant.GetHarvestedProduct(1);
-                productCount = pot.Plant.ActiveHarvestables.Count;
-                botanistCapacity = botanist.Inventory.GetCapacityForItem(harvestedProduct);
-                destinationCapacity = (int)Utils.CallMethod<HarvestPotBehaviour>("GetDestinationCapacityForItem", potBehaviour, [pot, harvestedProduct]);
-                outputCapacity = Utils.ToInterface<ITransitEntity>(pot).GetOutputCapacityForItem(harvestedProduct, null);
             }
             else if (Utils.Is<HarvestMushroomBedBehaviour>(behaviour))
             {
                 HarvestMushroomBedBehaviour shroomBehaviour = Utils.CastTo<HarvestMushroomBedBehaviour>(behaviour);
                 return (int)Utils.CallMethod<HarvestMushroomBedBehaviour>("GetQuantityToHarvest", shroomBehaviour);
-                MushroomBed bed = Utils.GetField<HarvestMushroomBedBehaviour, MushroomBed>("_bed", shroomBehaviour);
-                ItemInstance harvestedProduct = bed.CurrentColony.GetHarvestedShroom(1);
-                productCount = bed.CurrentColony.GrownMushroomCount;
-                botanistCapacity = botanist.Inventory.GetCapacityForItem(harvestedProduct);
-                destinationCapacity = (int)Utils.CallMethod<HarvestMushroomBedBehaviour>("GetDestinationCapacityForItem", shroomBehaviour, [bed, harvestedProduct]);
-                outputCapacity = Utils.ToInterface<ITransitEntity>(bed).GetOutputCapacityForItem(harvestedProduct, null);
             }
             else
             {
                 Utils.Warn($"Couldn't get quantity to harvest from behaviour {Utils.GetType(behaviour).Name}");
                 return 0;
             }
-
-            return Mathf.Min(new int[] { productCount, botanistCapacity, destinationCapacity, outputCapacity });
         }
 
         // coroutine with accelerated animations
