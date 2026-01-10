@@ -15,7 +15,7 @@ using Il2CppScheduleOne.StationFramework;
 
 
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.3", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.4", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -422,8 +422,24 @@ namespace ProduceMore
 // fix chemist starting new chemistry station operation without checking space in output - not my bug, but done
 // fix NPC item capacity checks - done
 // convert as many destructive patches as possible to non-destructive ones - done (v1.1.3)
+// fix mixing station dinging infinitely on single mix at 2x multiplier - done
+// fix not able to harvest weed (UE shows growth percentage as -0.999993764) - done
+// fix dryingoperationui.updateposition postfix to not assume rack will be non-null - done
+// fix plants to use potacceleration instead of mushroombedacceleration - done
+// fix broken plant/mushroom acceleration - done
+// fix broken chem station acceleration - done
+// fix mixing station mk2 display time - done
+// improve lag spike on game tick - done (v1.1.4)
 
 
 // Bugs:
-// oof
-
+// - mixing station mk2 dings infinitely on single mix at 2x multiplier
+// - weed growth percentage going negative, making it impossible to harvest
+// - stack trace during dryingoperationui.updateposition postfix
+// - no null check in Utils.GetType
+// - plant growth acceleration not working for at least one person
+// - plants were using mushroom bed acceleration; oops
+// - chemistry station finishes instantly
+// - chemistry station acceleration not applied if initiated by user
+// - mixing station mk2 displays wrong time remaining
+// - lag spike every game tick

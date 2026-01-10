@@ -253,6 +253,11 @@ namespace ProduceMore
 #else
         public static Type GetType(Il2CppObjectBase o)
         {
+            if (o == null)
+            {
+                return null;
+            }
+
             string typeName = Il2CppType.TypeFromPointer(o.ObjectClass).FullName;
             return S1Assembly.GetType($"Il2Cpp{typeName}");
         }
@@ -277,14 +282,14 @@ namespace ProduceMore
 #endif
         }
 
-        // Convert a delegate to a predicate.
+        // Convert a delegate to a predicate that IL2CPP ienumerable functions can actually use.
 #if MONO_BUILD
-        public static Predicate<T> ConvertToPredicate<T>(Func<T, bool> func)
+        public static Predicate<T> ToPredicate<T>(Func<T, bool> func)
         {
             return new Predicate<T>(func);
         }
 #else
-        public static Il2CppSystem.Predicate<T> ConvertToPredicate<T>(Func<T, bool> func)
+        public static Il2CppSystem.Predicate<T> ToPredicate<T>(Func<T, bool> func)
         {
             return DelegateSupport.ConvertDelegate<Il2CppSystem.Predicate<T>>(func);
         }
@@ -346,6 +351,11 @@ namespace ProduceMore
         // Start coroutine and add it to the list.
         public static object StartCoroutine(IEnumerator func)
         {
+            if (func == null)
+            {
+                Utils.Warn($"Tried to start null coroutine.");
+                return null;
+            }
             object coroutine = MelonCoroutines.Start(func);
             Mod.runningCoroutines.Add(coroutine);
             return coroutine;
@@ -354,14 +364,13 @@ namespace ProduceMore
         // Shut down a coroutine and try to remove it from the list.
         public static void StopCoroutine(object coroutine)
         {
-            try
+            if (coroutine == null)
             {
-                Mod.runningCoroutines.Remove(coroutine);
+                Warn($"Tried to stop null coroutine; is there a dead entry in the list? (length {Mod.runningCoroutines.Count})");
+                return;
             }
-            catch (Exception e)
-            {
-                Utils.PrintException(e);
-            }
+
+            Mod.runningCoroutines.Remove(coroutine);
 
             try
             {
@@ -458,7 +467,9 @@ namespace ProduceMore
                 {
                     Mod.originalRecipeTimes[recipe] = recipe.CookTime_Mins;
                 }
-                int newTime = Mathf.Max((int)((float)recipe.CookTime_Mins / stationSpeed), 1);
+
+                int originalTime = Mod.originalRecipeTimes[recipe];
+                int newTime = Mathf.Max((int)((float)originalTime / stationSpeed), 1);
                 recipe.CookTime_Mins = newTime;
                 Mod.processedRecipes.Add(recipe);
             }
@@ -473,6 +484,11 @@ namespace ProduceMore
             return Mod.GetStationCapacity(typeStrings[GetType(station)]);
         }
 
+        public static int GetStationCapacity(string stationString)
+        {
+            return Mod.GetStationCapacity(stationString);
+        }
+
         public static float GetStationSpeed(GridItem station)
         {
             if (station == null)
@@ -482,6 +498,11 @@ namespace ProduceMore
             return Mod.GetStationSpeed(typeStrings[GetType(station)]);
         }
 
+        public static float GetStationSpeed(string stationString)
+        {
+            return Mod.GetStationSpeed(stationString);
+        }
+
         public static float GetStationWorkSpeed(GridItem station)
         {
             if (station == null)
@@ -489,6 +510,11 @@ namespace ProduceMore
                 return 1f;
             }
             return Mod.GetStationWorkSpeed(typeStrings[GetType(station)]);
+        }
+
+        public static float GetStationWorkSpeed(string stationString)
+        {
+            return Mod.GetStationWorkSpeed(stationString);
         }
 
         public static int GetOriginalStationTime(GridItem station)
@@ -511,16 +537,16 @@ namespace ProduceMore
 
         public static int GetOriginalStationTime(string stationString)
         {
-            int time = 1;
-            if (!Mod.originalStationTimes.ContainsKey(stationString))
-            {
-                Utils.Warn($"Tried to get original station time for {stationString}, but there wasn't one in the index?");
-            }
-            else
+            int time = 10;
+            if (Mod.originalStationTimes.ContainsKey(stationString))
             {
                 time = Mod.originalStationTimes[stationString];
             }
-            return time;
+            else
+            {
+                Utils.Warn($"Tried to get original station time for {stationString}, but there wasn't one in the index?");
+            }
+                return time;
         }
     }
 
@@ -529,6 +555,7 @@ namespace ProduceMore
     public class ItemCapacityPatches
     {
         // Modify stack limit on item access
+        // Inlined almost always.
         [HarmonyPatch(typeof(ItemInstance), "StackLimit", MethodType.Getter)]
         [HarmonyPrefix]
         public static void StackLimitPrefix(ItemInstance __instance)
@@ -566,10 +593,6 @@ namespace ProduceMore
             if (item != null)
             {
                 Utils.ModItemStackLimit(item.Definition);
-            }
-            if (__instance.ItemInstance != null)
-            {
-                Utils.ModItemStackLimit(__instance.ItemInstance.Definition);
             }
 
             if (!__instance.DoesItemMatchHardFilters(item))
@@ -633,7 +656,7 @@ namespace ProduceMore
         // Replace with original method body.
         [HarmonyPatch(typeof(NPCInventory), "CanItemFit")]
         [HarmonyPostfix]
-        public static void NPCCanItemFitPrefix(NPCInventory __instance, ItemInstance item, ref bool __result)
+        public static void NPCCanItemFitPostfix(NPCInventory __instance, ItemInstance item, ref bool __result)
         {
             __result = item != null && __instance.GetCapacityForItem(item) >= item.Quantity;
         }
@@ -674,13 +697,13 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void IsRackReadyPrefix(DryingRack rack, ref bool __result)
         {
-            Utils.AddStationCapacity(rack, rack.ItemCapacity);
+            // Default capacity of drying rack not available as a constant.
+            Utils.AddStationCapacity(rack, 20);
             rack.ItemCapacity = Utils.GetStationCapacity(rack);
         }
 
         // Modify DryingRack.ItemCapacity
         // canstartoperation runs every time a player or npc tries to interact
-        // may have optimized away real access to itemcapacity; replace method body
         [HarmonyPatch(typeof(DryingRack), "CanStartOperation")]
         [HarmonyPostfix]
         public static void CanStartOperationPostfix(DryingRack __instance, ref bool __result)
@@ -701,10 +724,13 @@ namespace ProduceMore
         public static void UpdatePositionPostfix(DryingOperationUI __instance)
         {
             DryingRack rack = Singleton<DryingRackCanvas>.Instance.Rack;
-            Utils.AddOriginalStationTime(rack, DryingRack.DRY_MINS_PER_TIER);
+            if (rack != null)
+            {
+                Utils.AddOriginalStationTime(rack, DryingRack.DRY_MINS_PER_TIER);
+            }
 
-            int originalDryingTime = Utils.GetOriginalStationTime(rack);
-            float stationSpeed = Utils.GetStationSpeed(rack);
+            int originalDryingTime = DryingRack.DRY_MINS_PER_TIER;
+            float stationSpeed = Utils.GetStationSpeed("DryingRack");
             float dryingTime = (float)originalDryingTime / stationSpeed;
             float t = Mathf.Clamp01((float)__instance.AssignedOperation.Time / dryingTime);
             int num = Mathf.Clamp((int)dryingTime - __instance.AssignedOperation.Time, 0, (int)dryingTime);
@@ -723,7 +749,7 @@ namespace ProduceMore
         {
             Utils.AddOriginalStationTime("DryingRack", DryingRack.DRY_MINS_PER_TIER);
 
-            int originalTime = Utils.GetOriginalStationTime("DryingRack");
+            int originalTime = DryingRack.DRY_MINS_PER_TIER;
             float stationSpeed = Utils.Mod.GetStationSpeed("DryingRack");
             int dryingTime = (int)((float)originalTime / stationSpeed);
             if (__instance.Time >= dryingTime)
@@ -734,24 +760,18 @@ namespace ProduceMore
             __result = __instance.StartQuality;
         }
 
-        // modified copy of DryingRack.MinPass
         [HarmonyPatch(typeof(DryingRack), "MinPass")]
-        [HarmonyPrefix]
-        public static bool MinPassPrefix(DryingRack __instance)
+        [HarmonyPostfix]
+        public static void MinPassPostfix(DryingRack __instance)
         {
-            if (__instance == null)
-            {
-                return false;
-            }
-
-            Utils.AddOriginalStationTime(__instance, DryingRack.DRY_MINS_PER_TIER);
-            int originalStationTime = Utils.GetOriginalStationTime(__instance);
+            int originalStationTime = DryingRack.DRY_MINS_PER_TIER;
             float stationSpeed = Utils.GetStationSpeed(__instance);
             int dryingTime = (int)((float)originalStationTime / stationSpeed);
 
+            // TODO: fix logic for work speed < 1
             foreach (DryingOperation dryingOperation in __instance.DryingOperations.ToArray())
             {
-                dryingOperation.Time++;
+                // Don't increment dryingOperation.Time; it's already been incremented by original fn
                 if (dryingOperation.Time >= dryingTime)
                 {
                     if (dryingOperation.StartQuality >= EQuality.Premium)
@@ -767,7 +787,7 @@ namespace ProduceMore
                     }
                 }
             }
-            return false;
+            return;
         }
 
         // call our own coroutine to speed up employees hanging up leaves
@@ -805,6 +825,8 @@ namespace ProduceMore
             int quantityToDry = Mathf.Min(inputQuantity, outputCapacity);
             float waitTime = Mathf.Max(0.1f, waitTimePerItem * quantityToDry);
 
+            // So for the grabitem animation, there's not a simple way to make it repeat like other animations.
+            // Instead, we have to trigger the animation every second.
             int lastWholeSecond = 0;
             behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
             for (float i = 0f; i < waitTime; i += Time.deltaTime)
@@ -818,7 +840,7 @@ namespace ProduceMore
                     behaviour.Npc.Avatar.Animation.SetTrigger("GrabItem");
                     lastWholeSecond = (int)i;
                 }
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
             behaviour.Npc.Avatar.Animation.ResetTrigger("GrabItem");
 
@@ -1101,7 +1123,7 @@ namespace ProduceMore
 
         [HarmonyPatch(typeof(Chemist), "GetMixStationsReadyToMove")]
         [HarmonyPostfix]
-        public static void GetMixStationsReadyToMovePrefix(Chemist __instance, ref MixingStationList __result)
+        public static void GetMixStationsReadyToMovePostfix(Chemist __instance, ref MixingStationList __result)
         {
             var list = new MixingStationList();
 
@@ -1157,21 +1179,50 @@ namespace ProduceMore
 
         // GetMixTimeForCurrentOperation seems to have been optimized out.
         [HarmonyPatch(typeof(MixingStation), "MinPass")]
-        [HarmonyPrefix]
-        public static void MinPassPrefix(MixingStation __instance)
+        [HarmonyPostfix]
+        public static void MinPassPostfix(MixingStation __instance)
         {
-            if (__instance.CurrentMixOperation != null || __instance.OutputSlot.Quantity > 0)
+            if (__instance.CurrentMixOperation != null)
             {
-                if (__instance.CurrentMixOperation != null)
+                // Complete mixing operation if needed
+                int totalMixTime = __instance.GetMixTimeForCurrentOperation();
+                if (__instance.CurrentMixTime == totalMixTime && InstanceFinder.IsServer)
                 {
-                    int totalMixTime = __instance.GetMixTimeForCurrentOperation();
-                    if (__instance.CurrentMixTime + 1 >= totalMixTime && InstanceFinder.IsServer)
-                    {
-                        NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("Mixing_Operations_Completed", (NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("Mixing_Operations_Completed") + 1f).ToString(), true);
-                        __instance.MixingDone_Networked();
-                    }
+                    NetworkSingleton<VariableDatabase>.Instance.SetVariableValue("Mixing_Operations_Completed", (NetworkSingleton<VariableDatabase>.Instance.GetValue<float>("Mixing_Operations_Completed") + 1f).ToString(), true);
+                    __instance.MixingDone_Networked();
+                }
+
+                // Display correct time remaining
+                if (__instance.Clock != null)
+                {
+                    __instance.Clock.SetScreenLit(true);
+                    __instance.Clock.DisplayMinutes(Mathf.Max(totalMixTime - __instance.CurrentMixTime, 0));
                 }
             }
+
+            // Fix the blinky light
+            if (__instance.Light != null)
+            {
+                if (__instance.OutputSlot.Quantity > 0)
+                {
+                    __instance.Light.isOn = (int)Time.timeSinceLevelLoad % 2 == 0;
+                    return;
+                }
+                if (__instance.CurrentMixOperation != null)
+                {
+                    __instance.Light.isOn = true;
+                    return;
+                }
+                __instance.Light.isOn = false;
+            }
+        }
+
+        [HarmonyPatch(typeof(MixingStationMk2), "UpdateScreen")]
+        [HarmonyPostfix]
+        public static void UpdateScreenPostfix(MixingStationMk2 __instance)
+        {
+            int totalMixTime = __instance.GetMixTimeForCurrentOperation();
+            __instance.ProgressLabel.text = $"{totalMixTime - __instance.CurrentMixTime} mins remaining";
         }
 
         // start our accelerated mix coroutine
@@ -1209,14 +1260,15 @@ namespace ProduceMore
 
             behaviour.targetStation.SetNPCUser(behaviour.Npc.NetworkObject);
             behaviour.Npc.SetAnimationBool_Networked(null, "UseChemistryStation", true);
+
             int originalMixTimePerItem = behaviour.targetStation.MixTimePerItem;
             float mixTimePerItem = (float)originalMixTimePerItem / workSpeed;
             int mixQuantity = behaviour.targetStation.GetMixQuantity();
-            float totalMixTime = mixTimePerItem * (float)mixQuantity;
+            float totalMixTime = Mathf.Max(0.1f, mixTimePerItem * (float)mixQuantity);
             for (float i = 0f; i < totalMixTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.targetStation.uiPoint.position, 0, false);
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
 
             QualityItemInstance product = Utils.CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
@@ -1258,7 +1310,6 @@ namespace ProduceMore
         }
     }
 
-
     // Brick press patches
     [HarmonyPatch]
     public class BrickPressPatches
@@ -1290,6 +1341,7 @@ namespace ProduceMore
             yield return new WaitForEndOfFrame();
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", true);
+
             float workSpeed = Utils.GetStationWorkSpeed(behaviour.Press);
             float originalDuration = Utils.GetOriginalStationTime(behaviour.Press);
             float employeeMultiplier = Utils.CastTo<Packager>(behaviour.Npc).PackagingSpeedMultiplier;
@@ -1297,7 +1349,7 @@ namespace ProduceMore
             for (float i = 0f; i < duration; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Press.uiPoint.position, 0, false);
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
 
             behaviour.Npc.Avatar.Animation.SetBool("UsePackagingStation", false);
@@ -1343,7 +1395,7 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void StartCookOperationPrefix(Cauldron __instance, ref int remainingCookTime)
         {
-            // Base cauldron time not available as a constant. Use a magic number.
+            // Base cauldron time unfortunately not available as a constant
             Utils.AddOriginalStationTime(__instance, 360);
             int cookTime = Utils.GetOriginalStationTime(__instance);
             float stationSpeed = Utils.GetStationSpeed(__instance);
@@ -1425,7 +1477,7 @@ namespace ProduceMore
             for (float i = 0f; i < workTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.LinkOrigin.position, 0, false);
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
             behaviour.Npc.Avatar.Animation.SetBool("UseChemistryStation", false);
             if (InstanceFinder.IsServer)
@@ -1506,7 +1558,7 @@ namespace ProduceMore
                 for (float i = 0f; i < packageTime; i += Time.deltaTime)
                 {
                     behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.Station.Container.position, 0, false);
-                    yield return new WaitForEndOfFrame();
+                    yield return null;
                 }
 
                 if (InstanceFinder.IsServer)
@@ -1561,20 +1613,18 @@ namespace ProduceMore
     public class GrowablePatches
     {
         // plant speed
-        // Can't patch Pot.GetAverageLightExposure in IL2CPP--optimized out entirely
-        // maybe NormalizedGrowthProgress setter? -- inlined
-        // just postfix minpass
+        // due to inlining, this is really the only place we can hook.
+        // unfortunately, GetAverageLightExposure is expensive, and we don't want to call it more than once per frame.
+        // use a destructive prefix for performance reasons.
         [HarmonyPatch(typeof(Plant), "MinPass")]
-        [HarmonyPostfix]
-        public static void MinPassPostfix(Plant __instance, int mins)
+        [HarmonyPrefix]
+        public static bool MinPassPrefix(Plant __instance, int mins)
         {
             if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Utils.Mod.plantsAlwaysGrowPresent)
             {
-                return;
+                return false;
             }
 
-            // In order to calculate delta, we need to know original growth speed.
-            // Just do this calculation again I guess.
             float num = 1f / ((float)__instance.GrowthTime * 60f) * (float)mins;
             num *= __instance.Pot.GetTemperatureGrowthMultiplier();
             float num2;
@@ -1590,12 +1640,17 @@ namespace ProduceMore
                 num *= 0f;
             }
 
-            float growthSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
-            __instance.SetNormalizedGrowthProgress(__instance.NormalizedGrowthProgress + (num * (growthSpeed - 1f)));
+            float growthSpeed = Utils.Mod.GetStationSpeed("Pot");
+            float lastProgress = __instance.NormalizedGrowthProgress;
+            float percentage = Mathf.Clamp01(lastProgress + (num * growthSpeed));
+            __instance.SetNormalizedGrowthProgress(percentage);
+
+            return false;
         }
 
         // This function has been optimized out completely--vtable entry is blank??
         // Call a local copy
+        // TODO: this function is expensive. cache light exposure per tile, and add listeners to Tile.onTileChanged.
         private static float GetAverageLightExposure(GrowContainer container, out float growSpeedMultiplier)
         {
             growSpeedMultiplier = 1f;
@@ -1616,20 +1671,28 @@ namespace ProduceMore
         }
 
         // shroom speed
-        // growthprogress setter access inlined.
-        // do a minpass postfix instead.
+        // for performance reasons, do a destructive prefix.
         [HarmonyPatch(typeof(ShroomColony), "OnMinPass")]
-        [HarmonyPostfix]
-        public static void OnMinPassPostfix(ShroomColony __instance)
+        [HarmonyPrefix]
+        public static bool OnMinPassPostfix(ShroomColony __instance)
         {
             if (NetworkSingleton<TimeManager>.Instance.IsEndOfDay && !Utils.Mod.plantsAlwaysGrowPresent)
             {
-                return;
+                return false;
             }
-            float growthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance) * Utils.Mod.GetStationSpeed("MushroomBed");
-            int growTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
-            float percentage = growthRate / ((float)growTime * 60f);
-            Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [percentage]);
+            float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
+            float stationSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
+            int originalGrowTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
+
+            // Subtract 1 from stationSpeed to account for growth added by OnMinPass prior to this postfix
+            float newGrowTime = (float)originalGrowTime / (stationSpeed - 1f);
+            float growthDelta = Mathf.Clamp01(currentGrowthRate / ((float)newGrowTime * 60f));
+
+            // Keep growthprogress between 0 and 1
+            float percentageDelta = Mathf.Clamp01(__instance.GrowthProgress + growthDelta) - __instance.GrowthProgress;
+            Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [percentageDelta]);
+
+            return false;
         }
     }
 
@@ -1802,7 +1865,7 @@ namespace ProduceMore
             for (float i = 0f; i < waitTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(targetPosition, 0, false);
-                yield return new WaitForEndOfFrame();
+                yield return null;
             }
             if (!behaviour.AreTaskConditionsMetForContainer(growContainer))
             {
@@ -1920,14 +1983,21 @@ namespace ProduceMore
     [HarmonyPatch]
     public class ChemistryStationPatches
     {
+        // Adjust recipe time when player begins interacting with station
+        [HarmonyPatch(typeof(ChemistryStationCanvas), "Open")]
+        [HarmonyPrefix]
+        public static void CanvasOpenPrefix(ChemistryStationCanvas __instance, ChemistryStation station)
+        {
+            float stationSpeed = Utils.GetStationSpeed(station);
+            StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", __instance).Recipe.SelectedRecipe;
+            Utils.ModRecipeTime(recipe, stationSpeed);
+        }
+
         // Fix cook time label
         [HarmonyPatch(typeof(StationRecipeEntry), "AssignRecipe")]
         [HarmonyPostfix]
         public static void AssignRecipePostfix(StationRecipeEntry __instance, ref StationRecipe recipe)
         {
-            float stationSpeed = Utils.Mod.GetStationSpeed("ChemistryStation");
-            Utils.ModRecipeTime(__instance.Recipe, stationSpeed);
-
             int hours = __instance.Recipe.CookTime_Mins / 60;
             int minutes = __instance.Recipe.CookTime_Mins % 60;
             __instance.CookingTimeLabel.text = $"{hours}h";
@@ -1992,10 +2062,10 @@ namespace ProduceMore
             {
                 foreach (ItemDefinition itemDefinition in recipe.Ingredients[i].Items)
                 {
-                    StorableItemDefinition storableItemDefinition = Utils.CastTo<StorableItemDefinition>(itemDefinition);
+                    StorableItemDefinition storableIngredientDef = Utils.CastTo<StorableItemDefinition>(itemDefinition);
                     for (int j = 0; j < behaviour.targetStation.IngredientSlots.Length; j++)
                     {
-                        if (behaviour.targetStation.IngredientSlots[j].ItemInstance != null && behaviour.targetStation.IngredientSlots[j].ItemInstance.Definition.ID == storableItemDefinition.ID)
+                        if (behaviour.targetStation.IngredientSlots[j].ItemInstance != null && behaviour.targetStation.IngredientSlots[j].ItemInstance.Definition.ID == storableIngredientDef.ID)
                         {
                             list.Add(behaviour.targetStation.IngredientSlots[j].ItemInstance.GetCopy(recipe.Ingredients[i].Quantity));
                             behaviour.targetStation.IngredientSlots[j].ChangeQuantity(-recipe.Ingredients[i].Quantity, false);
@@ -2031,7 +2101,7 @@ namespace ProduceMore
         [HarmonyPostfix]
         public static void GetChemistryStationsReadyToStartPostfix(Chemist __instance, ref ChemStationList __result)
         {
-            ChemStationList readyStations = __result.FindAll(Utils.ConvertToPredicate<ChemistryStation>((station) => 
+            ChemStationList readyStations = __result.FindAll(Utils.ToPredicate<ChemistryStation>((station) => 
             {
                 StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", station).Recipe.SelectedRecipe;
                 return (bool)Utils.CallMethod<ChemistryStation>("DoesOutputHaveSpace", station, [recipe]);
