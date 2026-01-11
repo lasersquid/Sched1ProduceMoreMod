@@ -400,6 +400,10 @@ namespace ProduceMore
         // Does NOT modify station capacity; handle that in patches
         public static void AddStationCapacity(GridItem station, int capacity)
         {
+            if (station == null)
+            {
+                return;
+            }
             string stationString = typeStrings.GetValueOrDefault(GetType(station));
             if (!Mod.processedStationCapacities.Contains(station))
             {
@@ -414,6 +418,10 @@ namespace ProduceMore
         // Does NOT modify station time; handle that in patches
         public static void AddOriginalStationTime(GridItem station, int time)
         {
+            if (station == null)
+            {
+                return;
+            }
             string stationString = typeStrings.GetValueOrDefault(GetType(station));
             if (!Mod.processedStationTimes.Contains(station))
             {
@@ -436,6 +444,10 @@ namespace ProduceMore
         // Modifies item definition
         public static void ModItemStackLimit(ItemDefinition itemDefinition)
         {
+            if (itemDefinition == null)
+            {
+                return;
+            }
             if (!Mod.processedItemDefs.Contains(itemDefinition) && itemDefinition.Name.ToLower() != "cash")
             {
                 // Speed Grow is classified as product for some reason
@@ -461,6 +473,10 @@ namespace ProduceMore
         // Modifies recipe definition
         public static void ModRecipeTime(StationRecipe recipe, float stationSpeed)
         {
+            if (recipe == null)
+            {
+                return;
+            }
             if (!Mod.processedRecipes.Contains(recipe))
             {
                 if (!Mod.originalRecipeTimes.ContainsKey(recipe))
@@ -1988,9 +2004,12 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void CanvasOpenPrefix(ChemistryStationCanvas __instance, ChemistryStation station)
         {
-            float stationSpeed = Utils.GetStationSpeed(station);
-            StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", __instance).Recipe.SelectedRecipe;
-            Utils.ModRecipeTime(recipe, stationSpeed);
+            if (station != null) 
+            {
+                float stationSpeed = Utils.GetStationSpeed(station);
+                StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", station).Recipe.SelectedRecipe;
+                Utils.ModRecipeTime(recipe, stationSpeed);
+            }
         }
 
         // Fix cook time label
