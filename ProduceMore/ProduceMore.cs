@@ -1095,8 +1095,10 @@ namespace ProduceMore
                 __result = 0;
                 return;
             }
-            __result = Mathf.Min([__instance.ProductSlot.Quantity, __instance.MixerSlot.Quantity, __instance.MaxMixQuantity]);
+            int[] nums = new int[3] { __instance.ProductSlot.Quantity, __instance.MixerSlot.Quantity, __instance.MaxMixQuantity };
+            __result = Mathf.Min(nums);
         }
+
 
         // actual call to GetMixQuantity seems to have been optimized out.
         [HarmonyPatch(typeof(MixingStation), "CanStartMix")]
@@ -1560,7 +1562,8 @@ namespace ProduceMore
             int productPerPackage = packagingDefinition.Quantity;
             int productQuantity = behaviour.Station.ProductSlot.Quantity;
             int packagingQuantity = behaviour.Station.PackagingSlot.Quantity;
-            int numPackages = Mathf.Min([packagingQuantity, productQuantity / productPerPackage, outputSpace]);
+            int[] nums = new int[] { packagingQuantity, productQuantity / productPerPackage, outputSpace }; 
+            int numPackages = Mathf.Min(nums);
 
             // leave the last package to PackSingleInstance
             int numBatchPackages = numPackages - 1;
@@ -1999,30 +2002,29 @@ namespace ProduceMore
     [HarmonyPatch]
     public class ChemistryStationPatches
     {
-        // Adjust recipe time when player begins interacting with station
+        // Regenerate cook time label every time player looks into chemistry station
         [HarmonyPatch(typeof(ChemistryStationCanvas), "Open")]
-        [HarmonyPrefix]
-        public static void CanvasOpenPrefix(ChemistryStationCanvas __instance, ChemistryStation station)
+        [HarmonyPostfix]
+        public static void CanvasOpenPostfix(ChemistryStationCanvas __instance, ChemistryStation station)
         {
             if (station != null) 
             {
                 float stationSpeed = Utils.GetStationSpeed(station);
-                StationRecipe recipe = Utils.GetProperty<ChemistryStation, ChemistryStationConfiguration>("stationConfiguration", station).Recipe.SelectedRecipe;
-                Utils.ModRecipeTime(recipe, stationSpeed);
-            }
-        }
-
-        // Fix cook time label
-        [HarmonyPatch(typeof(StationRecipeEntry), "AssignRecipe")]
-        [HarmonyPostfix]
-        public static void AssignRecipePostfix(StationRecipeEntry __instance, ref StationRecipe recipe)
-        {
-            int hours = __instance.Recipe.CookTime_Mins / 60;
-            int minutes = __instance.Recipe.CookTime_Mins % 60;
-            __instance.CookingTimeLabel.text = $"{hours}h";
-            if (minutes > 0)
-            {
-                __instance.CookingTimeLabel.text += $" {minutes}m";
+                foreach (StationRecipe recipe in __instance.Recipes)
+                {
+                    Utils.ModRecipeTime(recipe, stationSpeed);
+                }
+                foreach (StationRecipeEntry entry in __instance.recipeEntries)
+                {
+                    Utils.ModRecipeTime(entry.Recipe, stationSpeed);
+                    int hours = entry.Recipe.CookTime_Mins / 60;
+                    int minutes = entry.Recipe.CookTime_Mins % 60;
+                    entry.CookingTimeLabel.text = $"{hours}h";
+                    if (minutes > 0)
+                    {
+                        entry.CookingTimeLabel.text += $" {minutes}m";
+                    }
+		}
             }
         }
 
