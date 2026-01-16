@@ -38,6 +38,7 @@ using StringArray = string[];
 using ItemInstanceList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemInstance>;
 using MixingStationList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.MixingStation>;
 using ChemStationList = System.Collections.Generic.List<ScheduleOne.ObjectScripts.ChemistryStation>;
+using RecipeEntryList = System.Collections.Generic.List<ScheduleOne.UI.Stations.StationRecipeEntry>;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
@@ -75,6 +76,7 @@ using StringArray = Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray;
 using ItemInstanceList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemInstance>;
 using MixingStationList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.MixingStation>;
 using ChemStationList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ObjectScripts.ChemistryStation>;
+using RecipeEntryList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.UI.Stations.StationRecipeEntry>;
 #endif
 
 namespace ProduceMore
@@ -1139,46 +1141,6 @@ namespace ProduceMore
             return;
         }
 
-        [HarmonyPatch(typeof(Chemist), "GetMixStationsReadyToMove")]
-        [HarmonyPostfix]
-        public static void GetMixStationsReadyToMovePostfix(Chemist __instance, ref MixingStationList __result)
-        {
-            var list = new MixingStationList();
-
-            foreach (MixingStation mixingStation in Utils.GetProperty<Chemist, ChemistConfiguration>("configuration", __instance).MixStations)
-            {
-                ItemSlot outputSlot = mixingStation.OutputSlot;
-                MixingStationConfiguration configuration = Utils.GetProperty<MixingStation, MixingStationConfiguration>("stationConfiguration", mixingStation);
-                BuildableItem destination = configuration.Destination.SelectedObject;
-                if (outputSlot.Quantity != 0 && __instance.MoveItemBehaviour.IsTransitRouteValid(configuration.DestinationRoute, outputSlot.ItemInstance.ID))
-                {
-                    // Only deliver to packaging stations with at least half a stack of space in input slot.
-                    // Prevents chemists from running back and forth constantly to only carry a few items.
-                    if (Utils.Is<PackagingStation>(destination) || Utils.Is<PackagingStationMk2>(destination))
-                    {
-                        PackagingStation station = Utils.CastTo<PackagingStation>(destination);
-                        if (station.ProductSlot.ItemInstance == null)
-                        {
-                            list.Add(mixingStation);
-                        }
-                        else if (station.ProductSlot.ItemInstance.CanStackWith(outputSlot.ItemInstance))
-                        {
-                            int inputStackLimit = station.ProductSlot.ItemInstance.StackLimit;
-                            if (inputStackLimit - station.ProductSlot.Quantity > inputStackLimit / 2)
-                            {
-                                list.Add(mixingStation);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        list.Add(mixingStation);
-                    }
-                }
-            }
-            __result = list;
-        }
-
         [HarmonyPatch(typeof(StartMixingStationBehaviour), "StartCook")]
         [HarmonyPrefix]
         public static void StartCookPrefix(StartMixingStationBehaviour __instance)
@@ -1286,7 +1248,7 @@ namespace ProduceMore
             for (float i = 0f; i < totalMixTime; i += Time.deltaTime)
             {
                 behaviour.Npc.Avatar.LookController.OverrideLookTarget(behaviour.targetStation.uiPoint.position, 0, false);
-                yield return null;
+                yield return new WaitForEndOfFrame();
             }
 
             QualityItemInstance product = Utils.CastTo<QualityItemInstance>(behaviour.targetStation.ProductSlot.ItemInstance);
@@ -1322,9 +1284,17 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static void InitializeUIPrefix(MixingStation station)
         {
-            int stationCapacity = Utils.GetStationCapacity(station);
-            Utils.GetProperty<MixingStation, MixingStationConfiguration>("stationConfiguration", station).StartThrehold.Configure(1f, stationCapacity, true);
-            station.MaxMixQuantity = stationCapacity;
+            try 
+            {
+                int stationCapacity = Utils.GetStationCapacity(station);
+                Utils.GetProperty<MixingStation, MixingStationConfiguration>("stationConfiguration", station).StartThrehold.Configure(1f, stationCapacity, true);
+                station.MaxMixQuantity = stationCapacity;
+            }
+            catch (Exception e)
+            {
+                Utils.Warn($"Exception while trying to initialize Mixing Station UI.");
+                Utils.PrintException(e);
+            }
         }
     }
 
@@ -1947,10 +1917,6 @@ namespace ProduceMore
         [HarmonyPrefix]
         public static bool OnActiveTickPrefix(GrowContainerBehaviour __instance)
         {
-            // base.OnActiveTick is originally called here.
-            // However, Behaviour.OnActiveTick is empty.
-            // Just skip the whole call.
-
             if (!InstanceFinder.IsServer)
             {
                 return false;
@@ -2014,7 +1980,8 @@ namespace ProduceMore
                 {
                     Utils.ModRecipeTime(recipe, stationSpeed);
                 }
-                foreach (StationRecipeEntry entry in __instance.recipeEntries)
+                RecipeEntryList entries = Utils.GetProperty<ChemistryStationCanvas, RecipeEntryList>("recipeEntries", __instance);
+                foreach (StationRecipeEntry entry in entries)
                 {
                     Utils.ModRecipeTime(entry.Recipe, stationSpeed);
                     int hours = entry.Recipe.CookTime_Mins / 60;
@@ -2024,8 +1991,16 @@ namespace ProduceMore
                     {
                         entry.CookingTimeLabel.text += $" {minutes}m";
                     }
-		}
+                }
             }
+        }
+
+        [HarmonyPatch(typeof(StationRecipeEntry), "AssignRecipe")]
+        [HarmonyPrefix]
+        public static void AssignRecipePrefix(StationRecipeEntry __instance, StationRecipe recipe)
+        {
+            float stationSpeed = Utils.GetStationSpeed("ChemistryStation");
+            Utils.ModRecipeTime(recipe, stationSpeed);
         }
 
         // use our own work coroutine to speed up animations
