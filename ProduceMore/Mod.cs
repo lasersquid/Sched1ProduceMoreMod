@@ -432,6 +432,8 @@ namespace ProduceMore
 // improve lag spike on game tick - done (v1.1.4)
 // fix chemistrystationcanvas not loading properly - done
 // fix chemistrystation cook time labels not always updating - done
+// fix divide-by-zero when mushroombed acceleration is 1 - done
+// fix chemists getting stuck at mixing stations - test
 
 
 // Bugs:

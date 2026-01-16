@@ -1673,6 +1673,11 @@ namespace ProduceMore
             float stationSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
             int originalGrowTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
 
+            // Avoid dividing by zero
+            if (Mathf.Approximately(stationSpeed, 1f))
+            {
+                return false;
+            }
             // Subtract 1 from stationSpeed to account for growth added by OnMinPass prior to this postfix
             float newGrowTime = (float)originalGrowTime / (stationSpeed - 1f);
             float growthDelta = Mathf.Clamp01(currentGrowthRate / ((float)newGrowTime * 60f));
