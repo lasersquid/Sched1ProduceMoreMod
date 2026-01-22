@@ -1631,7 +1631,7 @@ namespace ProduceMore
 
             float growthSpeed = Utils.Mod.GetStationSpeed("Pot");
             float lastProgress = __instance.NormalizedGrowthProgress;
-            float percentage = Mathf.Clamp01(lastProgress + (num * growthSpeed));
+            float percentage = Mathf.Clamp(lastProgress + (num * growthSpeed), 0f, 1.1f);
             __instance.SetNormalizedGrowthProgress(percentage);
 
             return false;
@@ -1669,21 +1669,21 @@ namespace ProduceMore
             {
                 return false;
             }
-            float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
-            float stationSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
-            int originalGrowTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
 
-            // Avoid dividing by zero
-            if (Mathf.Approximately(stationSpeed, 1f))
+            float stationSpeed = Utils.Mod.GetStationSpeed("MushroomBed");
+            if (Mathf.Approximately(stationSpeed, 0f))
             {
                 return false;
             }
-            // Subtract 1 from stationSpeed to account for growth added by OnMinPass prior to this postfix
-            float newGrowTime = (float)originalGrowTime / (stationSpeed - 1f);
+
+            float currentGrowthRate = (float)Utils.CallMethod<ShroomColony>("GetCurrentGrowthRate", __instance);
+            int originalGrowTime = (int)Utils.GetField<ShroomColony>("_growTime", __instance);
+            float newGrowTime = (float)originalGrowTime / stationSpeed;
             float growthDelta = Mathf.Clamp01(currentGrowthRate / ((float)newGrowTime * 60f));
 
-            // Keep growthprogress between 0 and 1
-            float percentageDelta = Mathf.Clamp01(__instance.GrowthProgress + growthDelta) - __instance.GrowthProgress;
+            // Keep growthprogress between 0 and 1.1.
+            // IsFullyGrown sometimes returns a false negative if we use Clamp01, so push the max to 1.1.
+            float percentageDelta = Mathf.Clamp(__instance.GrowthProgress + growthDelta, 0f, 1.1f) - __instance.GrowthProgress;
             Utils.CallMethod<ShroomColony>("ChangeGrowthPercentage", __instance, [percentageDelta]);
 
             return false;
