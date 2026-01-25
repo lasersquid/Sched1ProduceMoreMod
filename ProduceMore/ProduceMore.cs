@@ -751,7 +751,7 @@ namespace ProduceMore
             float stationSpeed = Utils.GetStationSpeed("DryingRack");
             float dryingTime = (float)originalDryingTime / stationSpeed;
             float t = Mathf.Clamp01((float)__instance.AssignedOperation.Time / dryingTime);
-            int num = Mathf.Clamp((int)dryingTime - __instance.AssignedOperation.Time, 0, (int)dryingTime);
+            int num = (int)Mathf.Clamp((int)dryingTime - __instance.AssignedOperation.Time, 0, (int)dryingTime);
             int num2 = num / 60;
             int num3 = num % 60;
             __instance.Tooltip.text = num2.ToString() + "h " + num3.ToString() + "m until next tier";
@@ -778,9 +778,9 @@ namespace ProduceMore
             __result = __instance.StartQuality;
         }
 
-        [HarmonyPatch(typeof(DryingRack), "MinPass")]
+        [HarmonyPatch(typeof(DryingRack), "OnTimePass")]
         [HarmonyPostfix]
-        public static void MinPassPostfix(DryingRack __instance)
+        public static void OnTimePassPostfix(DryingRack __instance)
         {
             int originalStationTime = DryingRack.DRY_MINS_PER_TIER;
             float stationSpeed = Utils.GetStationSpeed(__instance);
@@ -802,6 +802,7 @@ namespace ProduceMore
                     else
                     {
                         dryingOperation.IncreaseQuality();
+                        __instance.RefreshDryingEffects();
                     }
                 }
             }
@@ -1038,7 +1039,7 @@ namespace ProduceMore
                 yield break;
             }
 
-            behaviour.Npc.SetEquippable_Networked(null, "Avatar/Equippables/Hammer");
+            behaviour.Npc.SetEquippable_Client(null, "Avatar/Equippables/Hammer");
             behaviour.targetOven.Door.SetPosition(1f);
             behaviour.targetOven.WireTray.SetPosition(1f);
             yield return new WaitForSeconds(Mathf.Max(0.1f, 0.5f / stationSpeed));
@@ -1158,9 +1159,9 @@ namespace ProduceMore
         }
 
         // GetMixTimeForCurrentOperation seems to have been optimized out.
-        [HarmonyPatch(typeof(MixingStation), "MinPass")]
+        [HarmonyPatch(typeof(MixingStation), "OnTimePass")]
         [HarmonyPostfix]
-        public static void MinPassPostfix(MixingStation __instance)
+        public static void OnTimePassPostfix(MixingStation __instance)
         {
             if (__instance.CurrentMixOperation != null)
             {
