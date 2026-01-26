@@ -802,7 +802,7 @@ namespace ProduceMore
                     else
                     {
                         dryingOperation.IncreaseQuality();
-                        __instance.RefreshDryingEffects();
+                        Utils.CallMethod<DryingRack>("RefreshDryingEffects", __instance);
                     }
                 }
             }

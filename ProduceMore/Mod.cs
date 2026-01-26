@@ -435,11 +435,7 @@ namespace ProduceMore
 // fix divide-by-zero when mushroombed acceleration is 1 - done
 // fix chemists getting stuck at mixing stations - mostly fixed; still vulnerable to proximity bugs
 // fix plant/shroom growth getting stuck at 99% - done (v1.1.5)
+// update for 0.4.3 - done (v1.1.6)
 
 
 // Bugs:
-// - chemistrystationcanvas not loading slots and other widgets - fixed
-// - chemists stuck nodding at mixing stations - fixed I hope??
-// - mushroom growth percentage going negative - fixed
-// - chemistry station cook time labels not always updating - fixed
-// - plants/shrooms not always harvestable when growth is complete - fixed
