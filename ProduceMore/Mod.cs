@@ -13,8 +13,6 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
-
-
 [assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.6", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
@@ -190,6 +188,7 @@ namespace ProduceMore
             stackOverrides.CreateEntry<int>("Revolver Cylinder", 10, "Revolver Cylinder", false);
             stackOverrides.CreateEntry<int>("Spray Paint", 10, "Spray Paint", false);
             stackOverrides.CreateEntry<int>("Graffiti Cleaner", 10, "Graffiti Cleaner", false);
+            stackOverrides.CreateEntry<int>("Trash Bag", 10, "Trash Bag", false);
 
             stationSpeeds.SaveToFile(false);
             stationCapacities.SaveToFile(false);
@@ -435,7 +434,8 @@ namespace ProduceMore
 // fix divide-by-zero when mushroombed acceleration is 1 - done
 // fix chemists getting stuck at mixing stations - mostly fixed; still vulnerable to proximity bugs
 // fix plant/shroom growth getting stuck at 99% - done (v1.1.5)
-// update for 0.4.3 - done (v1.1.6)
+// update for 0.4.3 - done
+// fix bugging out when speed multipliers are set to zero - done (v1.1.6)
 
 
 // Bugs:

@@ -513,7 +513,7 @@ namespace ProduceMore
             {
                 return 1f;
             }
-            return Mod.GetStationSpeed(typeStrings[GetType(station)]);
+            return Mathf.Clamp(Mod.GetStationSpeed(typeStrings[GetType(station)]), float.Epislon, float.MaxValue);
         }
 
         public static float GetStationSpeed(string stationString)
@@ -527,7 +527,7 @@ namespace ProduceMore
             {
                 return 1f;
             }
-            return Mod.GetStationWorkSpeed(typeStrings[GetType(station)]);
+            return Mathf.Clamp(Mod.GetStationWorkSpeed(typeStrings[GetType(station)]), float.Epsilon, float.MaxValue);
         }
 
         public static float GetStationWorkSpeed(string stationString)
