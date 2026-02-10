@@ -13,7 +13,7 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.6", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.7", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
