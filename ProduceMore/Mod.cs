@@ -1,5 +1,7 @@
 ﻿using MelonLoader;
 using HarmonyLib;
+using Il2CppScheduleOne.Core.Items.Framework;
+
 
 #if MONO_BUILD
 using ScheduleOne.EntityFramework;
