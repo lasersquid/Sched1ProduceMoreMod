@@ -60,6 +60,9 @@
 		<Reference Include="0Harmony">
 			<HintPath>il2cpp_libs/0Harmony.dll</HintPath>
 		</Reference>
+		<Reference Include="Il2CppScheduleOne.Core">
+			<HintPath>il2cpp_libs/Il2CppScheduleOne.Core.dll</HintPath>
+		</Reference>
 		<Reference Include="Assembly-CSharp">
 			<HintPath>il2cpp_libs/Assembly-CSharp.dll</HintPath>
 		</Reference>

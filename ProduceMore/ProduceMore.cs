@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using UnityEngine;
 using UnityEngine.Events;
+using Il2CppScheduleOne.Core.Items.Framework;
+
 
 #if MONO_BUILD
 using FishNet;
@@ -43,6 +45,7 @@ using RecipeEntryList = System.Collections.Generic.List<ScheduleOne.UI.Stations.
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime;
+using Il2CppScheduleOne.Core;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
@@ -573,12 +576,14 @@ namespace ProduceMore
     public class ItemCapacityPatches
     {
         // Modify stack limit on item access
-        // Inlined almost always.
-        [HarmonyPatch(typeof(ItemInstance), "StackLimit", MethodType.Getter)]
+        [HarmonyPatch(typeof(BaseItemInstance), "StackLimit", MethodType.Getter)]
         [HarmonyPrefix]
-        public static void StackLimitPrefix(ItemInstance __instance)
+        public static void StackLimitPrefix(BaseItemInstance __instance)
         {
-            Utils.ModItemStackLimit(__instance.Definition);
+            if (__instance is ItemInstance item)
+            {
+                Utils.ModItemStackLimit(item.Definition);
+            }
         }
 
         // For when we first encounter an itemdef via the phone delivery app
@@ -2319,10 +2324,10 @@ namespace ProduceMore
             {
                 __instance.onDragStart.Invoke();
             }
-            if (__instance.draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
-            {
-                __instance.CashSlotHintAnim.Play();
-            }
+            //if (__instance.draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
+            //{
+            //    object value = __instance.CashSlotHintAnim.Play();
+            //}
             __instance.tempIcon = __instance.draggedSlot.DuplicateIcon(Singleton<HUD>.Instance.transform, __instance.draggedAmount);
             __instance.tempIcon.Find("Balance").GetComponent<TextMeshProUGUI>().text = MoneyManager.FormatAmount(__instance.draggedCashAmount, false, false);
             __instance.draggedSlot.IsBeingDragged = true;
@@ -2347,8 +2352,8 @@ namespace ProduceMore
                 cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
             }
 
-            __instance.CashSlotHintAnim.Stop();
-            __instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
+            //__instance.CashSlotHintAnim.Stop();
+            //__instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
             if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchHardFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
             {
                 if ((__instance.HoveredSlot.assignedSlot.TryCast<HotbarSlot> != null) && (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot> == null))
