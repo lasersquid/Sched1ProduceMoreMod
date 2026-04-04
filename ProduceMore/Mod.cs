@@ -3,17 +3,21 @@ using HarmonyLib;
 
 #if MONO_BUILD
 using ScheduleOne.EntityFramework;
+using ScheduleOne.Core;
+using ScheduleOne.Core.Items.Framework;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.NPCs;
 using ScheduleOne.StationFramework;
 #else
 using Il2CppScheduleOne.EntityFramework;
+using Il2CppScheduleOne.Core;
+using Il2CppScheduleOne.Core.Items.Framework;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.7", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.8", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -436,6 +440,8 @@ namespace ProduceMore
 // fix plant/shroom growth getting stuck at 99% - done (v1.1.5)
 // update for 0.4.3 - done
 // fix bugging out when speed multipliers are set to zero - done (v1.1.6)
+// fix thunderstore readme (v1.1.7)
+// update for 0.4.4f10/0.4.5f1 - done (v1.1.8)
 
 
 // Bugs:

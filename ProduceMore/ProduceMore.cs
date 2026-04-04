@@ -13,6 +13,8 @@ using ScheduleOne.Employees;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
 using ScheduleOne.Growing;
+using ScheduleOne.Core;
+using ScheduleOne.Core.Items.Framework;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Lighting;
 using ScheduleOne.Management;
@@ -43,6 +45,8 @@ using RecipeEntryList = System.Collections.Generic.List<ScheduleOne.UI.Stations.
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime;
+using Il2CppScheduleOne.Core;
+using Il2CppScheduleOne.Core.Items.Framework;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.EntityFramework;
@@ -574,7 +578,7 @@ namespace ProduceMore
     {
         // Modify stack limit on item access
         // Inlined almost always.
-        [HarmonyPatch(typeof(ItemInstance), "StackLimit", MethodType.Getter)]
+        [HarmonyPatch(typeof(BaseItemInstance), "StackLimit", MethodType.Getter)]
         [HarmonyPrefix]
         public static void StackLimitPrefix(ItemInstance __instance)
         {
@@ -840,7 +844,7 @@ namespace ProduceMore
             float originalTimePerItem = StartDryingRackBehaviour.TIME_PER_ITEM;
             float waitTimePerItem = originalTimePerItem / workSpeed;
             int inputQuantity = behaviour.Rack.InputSlot.Quantity;
-            int outputCapacity = behaviour.Rack.ItemCapacity - behaviour.Rack.GetTotalDryingItems();
+            int outputCapacity = Utils.GetStationCapacity(behaviour.Rack) - behaviour.Rack.GetTotalDryingItems();
             int quantityToDry = Mathf.Min(inputQuantity, outputCapacity);
             float waitTime = Mathf.Max(0.1f, waitTimePerItem * quantityToDry);
 
@@ -2321,7 +2325,7 @@ namespace ProduceMore
             }
             if (__instance.draggedSlot.assignedSlot != PlayerSingleton<PlayerInventory>.Instance.cashSlot)
             {
-                __instance.CashSlotHintAnim.Play();
+                Singleton<HUD>.Instance.CashSlotHintAnim.Play();
             }
             __instance.tempIcon = __instance.draggedSlot.DuplicateIcon(Singleton<HUD>.Instance.transform, __instance.draggedAmount);
             __instance.tempIcon.Find("Balance").GetComponent<TextMeshProUGUI>().text = MoneyManager.FormatAmount(__instance.draggedCashAmount, false, false);
@@ -2346,9 +2350,8 @@ namespace ProduceMore
             {
                 cashInstance = __instance.draggedSlot.assignedSlot.ItemInstance.Cast<CashInstance>();
             }
-
-            __instance.CashSlotHintAnim.Stop();
-            __instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
+            Singleton<HUD>.Instance.CashSlotHintAnim.Stop();
+            Singleton<HUD>.Instance.CashSlotHintAnimCanvasGroup.alpha = 0f;
             if (__instance.CanDragFromSlot(__instance.draggedSlot) && __instance.HoveredSlot != null && __instance.CanCashBeDraggedIntoSlot(__instance.HoveredSlot) && !__instance.HoveredSlot.assignedSlot.IsLocked && !__instance.HoveredSlot.assignedSlot.IsAddLocked && __instance.HoveredSlot.assignedSlot.DoesItemMatchHardFilters(__instance.draggedSlot.assignedSlot.ItemInstance))
             {
                 if ((__instance.HoveredSlot.assignedSlot.TryCast<HotbarSlot> != null) && (__instance.HoveredSlot.assignedSlot.TryCast<CashSlot> == null))
@@ -2433,6 +2436,17 @@ namespace ProduceMore
             }
             return;
         }
+
+        // Relax proximity requirement for counting as "at" a transitentity
+        [HarmonyPatch(typeof(NavMeshUtility), "IsAtTransitEntity")]
+        [HarmonyPrefix]
+        public static void IsAtTransitEntityPrefix(ref float distanceThreshold)
+        {
+            if (distanceThreshold < 1f)
+            {
+                distanceThreshold = 1f;
+            }
+        }
     }
 
     // NPCMovement.SetDestination has a generic in its signature, which is unfriendly to annotations.
@@ -2474,10 +2488,10 @@ namespace ProduceMore
             // Meaning an employee can get stuck between 0.6f and 1f from the station access point,
             // where IsAtStation returns false, but SetDestination does not bring the NPC any closer.
             // In other words, get closer to the destination before ending walk routine.
-            if (successThreshold > 0.4f)
-            {
-                successThreshold = 0.4f;
-            }
+            //if (successThreshold > 0.4f)
+            //{
+            //    successThreshold = 0.4f;
+            //}
         }
     }
 }
