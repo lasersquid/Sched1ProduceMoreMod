@@ -17,7 +17,7 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.8", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.9", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -442,6 +442,7 @@ namespace ProduceMore
 // fix bugging out when speed multipliers are set to zero - done (v1.1.6)
 // fix thunderstore readme (v1.1.7)
 // update for 0.4.4f10/0.4.5f1 - done (v1.1.8)
+// fix stack overflow on BaseItemInstance.get_StackLimit - done (v1.1.9)
 
 
 // Bugs:

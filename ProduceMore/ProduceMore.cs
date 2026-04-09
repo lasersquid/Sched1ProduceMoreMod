@@ -471,7 +471,7 @@ namespace ProduceMore
                     Mod.originalStackLimits[category.ToString()] = itemDefinition.StackLimit;
                 }
 
-                itemDefinition.StackLimit = Mod.GetStackLimit(itemDefinition.GetDefaultInstance(1));
+                itemDefinition.StackLimit = Mod.GetStackLimit(itemDefinition);
                 Mod.processedItemDefs.Add(itemDefinition);
             }
         }
