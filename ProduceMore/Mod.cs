@@ -17,7 +17,7 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.StationFramework;
 #endif
 
-[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.1.9", "lasersquid", null)]
+[assembly: MelonInfo(typeof(ProduceMore.ProduceMoreMod), "ProduceMore", "1.2.0", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace ProduceMore
@@ -120,6 +120,10 @@ namespace ProduceMore
             processedStationTimes = new HashSet<GridItem>(unityComparer);
             processedItemDefs = new HashSet<ItemDefinition>(unityComparer);
             processedRecipes = new HashSet<StationRecipe>(unityComparer);
+
+            // Reprocess item definitions, as we may not catch every entry point
+            Utils.ReprocessItemDefs();
+
         }
 
         private void InitializeMelonPreferences()
@@ -443,6 +447,8 @@ namespace ProduceMore
 // fix thunderstore readme (v1.1.7)
 // update for 0.4.4f10/0.4.5f1 - done (v1.1.8)
 // fix stack overflow on BaseItemInstance.get_StackLimit - done (v1.1.9)
+// fix stack overflow on BaseItemInstance.get_StackLimit for real, by removing patch - done
+// improve employees getting stuck when stations are too close together - done (v1.2.0)
 
 
 // Bugs:

@@ -570,19 +570,32 @@ namespace ProduceMore
             }
                 return time;
         }
+
+        public static void ReprocessItemDefs()
+        {
+            if (Singleton<Registry>.InstanceExists)
+            {
+                foreach (ItemDefinition def in Singleton<Registry>.Instance.GetAllItems())
+                {
+                    Utils.ModItemStackLimit(def);
+                }
+            }
+        }
     }
 
     // Set stack sizes
     [HarmonyPatch]
     public class ItemCapacityPatches
     {
-        // Modify stack limit on item access
-        // Inlined almost always.
-        [HarmonyPatch(typeof(BaseItemInstance), "StackLimit", MethodType.Getter)]
-        [HarmonyPrefix]
-        public static void StackLimitPrefix(ItemInstance __instance)
+        // Modify all itemdefs in Registry on load
+        [HarmonyPatch(typeof(Registry), "_GetItem")]
+        [HarmonyPostfix]
+        public static void RegistryGetItemPostfix(Registry __instance, ref ItemDefinition __result)
         {
-            Utils.ModItemStackLimit(__instance.Definition);
+            if (__result != null)
+            {
+                Utils.ModItemStackLimit(__result);
+            }
         }
 
         // For when we first encounter an itemdef via the phone delivery app
@@ -734,7 +747,7 @@ namespace ProduceMore
             Utils.AddStationCapacity(__instance, 20);
             __instance.ItemCapacity = Utils.GetStationCapacity(__instance);
 
-            __result = __instance.GetTotalDryingItems() < __instance.ItemCapacity &&
+            __result = __instance.GetTotalDryingItems() <= __instance.ItemCapacity &&
                 __instance.InputSlot.Quantity != 0 &&
                 !__instance.InputSlot.IsLocked &&
                 !__instance.InputSlot.IsRemovalLocked;
@@ -2441,6 +2454,17 @@ namespace ProduceMore
         [HarmonyPatch(typeof(NavMeshUtility), "IsAtTransitEntity")]
         [HarmonyPrefix]
         public static void IsAtTransitEntityPrefix(ref float distanceThreshold)
+        {
+            if (distanceThreshold < 1f)
+            {
+                distanceThreshold = 1f;
+            }
+        }
+
+        // Relax proximity requirement
+        [HarmonyPatch(typeof(NPCMovement), "IsAsCloseAsPossible")]
+        [HarmonyPrefix]
+        public static void IsAsCloseAsPossiblePrefix(ref float distanceThreshold)
         {
             if (distanceThreshold < 1f)
             {
